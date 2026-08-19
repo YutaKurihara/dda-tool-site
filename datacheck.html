@@ -21,15 +21,20 @@
   <a class="navlink" href="about.html">About</a>
 </nav>
 
+<main class="full">
+  <div class="app-frame-wrap" id="app-slot"></div>
+</main>
+
 <main class="page" style="max-width:56rem">
 
 <div class="title-block">
 <h1>Data Check — the audit script</h1>
 <p class="lead">
-A damage estimate is only as credible as its inputs.
-<code>07_datacheck.js</code> is a read-only inspector that lays out every unit
-cost, damage curve and threshold — with its source — and regression-tests the
-valuation engine. The full source is embedded below.
+A damage estimate is only as credible as its inputs. The inspector above
+(<code>07_datacheck.js</code>) lays out every unit cost, damage curve and
+threshold — with its source — and regression-tests the valuation engine.
+It reads constants and assets only, performs no batch computation and writes
+nothing. The full source is embedded below.
 </p>
 </div>
 
@@ -45,15 +50,6 @@ valuation engine. The full source is embedded below.
   <tr><td>Engine Test</td><td>Pixel-wise vs. scalar DDF agreement, a hand-calculated damage case, the WorldPop scale test (guards against a ×100 population bug), and old-vs-new engine totals.</td></tr>
   </tbody>
 </table>
-
-<p class="muted">
-The app below is the script running live — it reads constants and assets
-only, performs no batch computation and writes nothing.
-</p>
-
-<h2>Live inspector</h2>
-
-<div class="app-frame-wrap" id="app-slot" style="height:80vh;border:1px solid var(--line);border-radius:4px;overflow:hidden"></div>
 
 <h2>Source</h2>
 
