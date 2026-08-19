@@ -14,7 +14,7 @@
  * of a broken iframe.
  */
 window.DDA_APPS = {
-  dashboard: "",
+  dashboard: "https://ee-kurihara-yt.projects.earthengine.app/view/dashboard",
   datacheck: "",
 };
 
