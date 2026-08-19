@@ -7,25 +7,28 @@ GEE App 埋め込み + 手法解説の静的サイト。ビルド不要の素の
 
 | ファイル | 内容 |
 |---|---|
-| `index.html` | ホーム — ツール概要・3ステージのパイプライン・被害額の計算式・データソース |
-| `dashboard.html` | ダッシュボード(GEE App を全画面 iframe 埋め込み) |
+| `index.html` | ホーム = ダッシュボード(GEE App を全画面 iframe 埋め込み) |
 | `flood.html` | 洪水 — Sentinel-1 変化検知 + FwDET 浸水深の解説 |
 | `landslide.html` | 土砂災害 — Sentinel-2 NDVI 変化検知の解説 |
 | `earthquake.html` | 地震 — RV-PWTT 建物倒壊検知の解説 |
-| `datacheck.html` | Data Check — 検証 UI の説明 + GEE App 埋め込み |
-| `assets/config.js` | **GEE App の URL を設定する唯一のファイル** |
-| `assets/style.css` | 共通スタイル |
+| `datacheck.html` | Data Check — 07_datacheck.js のソースコード埋め込み(Prism でハイライト) |
+| `about.html` | ツール概要・3ステージのパイプライン・被害額の計算式・データソース |
+| `code/07_datacheck.js` | datacheck.html が fetch するコードのコピー。**01_shared 側を更新したら再コピーすること** |
+| `assets/config.js` | **GEE App の URL を設定する唯一のファイル**(キーは dashboard のみ使用) |
+| `assets/style.css` | 共通スタイル(PWTT/Quarto 風・学術ドキュメント調) |
 
 ## 公開手順
 
-### 1. GEE App を公開して URL を設定(2 アプリ)
+### 1. GEE App を公開して URL を設定
 
-Code Editor で対象スクリプトを開き **Apps → NEW APP → Publish**:
+Code Editor で対象スクリプトを開き **Apps → NEW APP → Publish**
+(App Source Code は「Repository script path」を選ぶと保存のたびに自動反映):
 
 | App | 元スクリプト | config.js のキー |
 |---|---|---|
 | ダッシュボード | `03_dashboard/01_dashboard.js` | `dashboard` |
-| Data Check | `01_shared/07_datacheck.js` | `datacheck` |
+
+※ Data Check ページはアプリ埋め込みではなくソースコード表示のため App 不要。
 
 発行された URL(`https://ee-kurihara-yt.projects.earthengine.app/view/...`)を
 `assets/config.js` の `DDA_APPS` に貼る。URL が空のままだと、

@@ -4,139 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DDA Tool — Satellite-based Disaster Damage Assessment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=Source+Sans+3:wght@400;600&display=swap">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
 
 <nav class="topnav">
   <a class="brand" href="index.html">DDA Tool</a>
-  <a class="navlink active" href="index.html">Home</a>
-  <a class="navlink" href="dashboard.html">Dashboard</a>
+  <a class="navlink active" href="index.html">Dashboard</a>
   <a class="navlink" href="flood.html">Flood</a>
   <a class="navlink" href="landslide.html">Landslide</a>
   <a class="navlink" href="earthquake.html">Earthquake</a>
   <a class="navlink" href="datacheck.html">Data Check</a>
+  <a class="navlink" href="about.html">About</a>
 </nav>
 
-<main class="page">
-
-<h1>Satellite-based Disaster Damage Assessment for DIBI&nbsp;/&nbsp;Jitupasna</h1>
-<p class="lead">
-A Google Earth Engine tool that detects the footprint of floods, landslides and
-earthquakes from Sentinel-1/2 imagery, and converts it into monetary damage
-(IDR) following the Jitupasna post-disaster needs-assessment guideline
-(Perka BNPB No.15/2011) and the reporting items of BNPB's DIBI database.
-</p>
-
-<p>
-Everything runs on Google Earth Engine — no local GIS software is needed to
-produce an estimate. Heavy computation is done once per event as a batch export;
-the <a href="dashboard.html">dashboard</a> only reads the saved results, so it
-opens in seconds.
-</p>
-
-<h2>How the pipeline works</h2>
-
-<div class="pipeline">
-  <div class="stage">
-    <b>Stage 1 — Detection</b>
-    One script per hazard:
-    <a href="flood.html">flood</a> (Sentinel-1 change detection + water depth),
-    <a href="landslide.html">landslide</a> (Sentinel-2 vegetation loss),
-    <a href="earthquake.html">earthquake</a> (RV-PWTT building collapse).
-    Output: a 10&nbsp;m hazard mask (+ depth raster for floods).
-  </div>
-  <div class="arrow">→</div>
-  <div class="stage">
-    <b>Stage 2 — Valuation</b>
-    One shared damage engine overlays the hazard on 37 exposure layers
-    (buildings, roads, facilities, land use, population) and prices the damage
-    pixel by pixel. Output: one table per event
-    (<code>damage_value_&lt;id&gt;</code>).
-  </div>
-  <div class="arrow">→</div>
-  <div class="stage">
-    <b>Stage 3 — Reporting</b>
-    The <a href="dashboard.html">dashboard</a> maps the results per district
-    (kabupaten/kota) and exports two CSVs: DIBI (wide, one row per district)
-    and Jitupasna (long, district × damage class).
-  </div>
-</div>
-
-<p>
-The three stages communicate only through Earth Engine Assets, so adding a new
-hazard detector requires no change to the valuation engine or the dashboard —
-this is exactly how landslide and earthquake support were added.
-</p>
-
-<h2>How damage is priced</h2>
-
-<p>
-For every damage class (housing, health facilities, roads, rice fields, …) the
-engine evaluates, <em>at each 10&nbsp;m pixel</em>:
-</p>
-
-<div class="eq">
-$$\text{damage}_{\text{IDR}} \;=\; \sum_{\text{pixels}}
-\Big[\, \text{quantity} \times \text{unit cost}_{100\%} \times
-\mathrm{DDF}(\text{depth}) \,\Big] \times \text{province ratio}$$
-</div>
-
-<ul>
-  <li><b>Quantity</b> — flooded area (m² or ha) or length (km) of the exposed
-      asset in that pixel.</li>
-  <li><b>Unit cost</b> — the full reconstruction cost at 100&nbsp;% damage,
-      compiled from Indonesian government price standards (DKI SHST&nbsp;2025,
-      HSPK, PUPR) and statistics. Every value is tagged with its source.</li>
-  <li><b>DDF</b> — depth–damage functions (JRC, Huizinga et&nbsp;al.&nbsp;2017,
-      Asia set): the fraction of value lost at a given water depth. Evaluated
-      per pixel, not on a district average, because the curves are
-      non-linear.</li>
-  <li><b>Province ratio</b> — regional construction-cost index
-      (BPS IKK&nbsp;2025, DKI Jakarta&nbsp;=&nbsp;1.00).</li>
-</ul>
-
-<p>
-Landslides and earthquakes have no meaningful "depth", so the engine assigns a
-constant saturating depth inside the detected extent — every curve reaches
-100&nbsp;% loss, i.e. anything inside the footprint is treated as destroyed.
-</p>
-
-<p>
-Beyond monetary damage the same run also produces the Sendai Framework (SFDRR)
-indicators: affected facility counts (Target&nbsp;D), damaged / destroyed
-housing split (C-4), and exposed / affected population from WorldPop
-(B-1, B-3, B-4).
-</p>
-
-<h2>Data sources</h2>
-
-<table>
-  <tr><th>Layer</th><th>Dataset</th></tr>
-  <tr><td>Flood detection</td><td>Sentinel-1 GRD (SAR, 10&nbsp;m)</td></tr>
-  <tr><td>Landslide / earthquake (optical)</td><td>Sentinel-2 SR + Cloud Score+</td></tr>
-  <tr><td>Terrain (water depth)</td><td>FABDEM 30&nbsp;m bare-earth DEM</td></tr>
-  <tr><td>Buildings</td><td>VIDA combined footprints (Google Open Buildings + Microsoft)</td></tr>
-  <tr><td>Population</td><td>WorldPop 100&nbsp;m (2020)</td></tr>
-  <tr><td>Land use</td><td>In-house Random-Forest LULC 2025 (30&nbsp;m, 7 classes, field-verified training points)</td></tr>
-  <tr><td>Facilities / roads</td><td>37 curated exposure layers (OSM, ministry data, point buffers)</td></tr>
-  <tr><td>Admin boundaries</td><td>BPS 2020 (adm1/adm2/adm3)</td></tr>
-</table>
-
-<p>
-All unit costs, curves and thresholds can be inspected on the
-<a href="datacheck.html">Data Check</a> page.
-</p>
-
+<main class="full">
+  <div class="app-frame-wrap" id="app-slot"></div>
 </main>
 
-<footer class="site">
-  BNPB × JICA technical cooperation — Google Earth Engine implementation.
-</footer>
-
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
-  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}]});"></script>
+<script src="assets/config.js"></script>
+<script>mountApp('dashboard');</script>
 </body>
 </html>

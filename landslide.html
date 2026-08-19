@@ -4,22 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Landslide mapping — DDA Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=Source+Sans+3:wght@400;600&display=swap">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
 
 <nav class="topnav">
   <a class="brand" href="index.html">DDA Tool</a>
-  <a class="navlink" href="index.html">Home</a>
-  <a class="navlink" href="dashboard.html">Dashboard</a>
+  <a class="navlink" href="index.html">Dashboard</a>
   <a class="navlink" href="flood.html">Flood</a>
   <a class="navlink active" href="landslide.html">Landslide</a>
   <a class="navlink" href="earthquake.html">Earthquake</a>
   <a class="navlink" href="datacheck.html">Data Check</a>
+  <a class="navlink" href="about.html">About</a>
 </nav>
 
 <main class="page">
 
+<div class="title-block">
 <h1>Landslide extent</h1>
 <p class="lead">
 A landslide strips vegetation and exposes bare soil or rock. The detector
@@ -27,6 +30,7 @@ A landslide strips vegetation and exposes bare soil or rock. The detector
 Sentinel-2 optical imagery as a sharp drop in vegetation index, confirmed by a
 bare-soil or water signal.
 </p>
+</div>
 
 <h2>Detection logic</h2>
 
@@ -69,12 +73,14 @@ as for floods.
 <h2>Key parameters</h2>
 
 <table>
-  <tr><th>Parameter</th><th>Value</th><th>Rationale</th></tr>
+  <thead><tr><th>Parameter</th><th>Value</th><th>Rationale</th></tr></thead>
+  <tbody>
   <tr><td>NDVI drop</td><td>&gt; 0.25</td><td>Sharp vegetation loss, robust to seasonal variation</td></tr>
   <tr><td>Pre-event NDVI</td><td>&gt; 0.5</td><td>Must have been vegetated (excludes fields, urban)</td></tr>
   <tr><td>Bare-soil check</td><td>BSI &gt; 0.05, or MNDWI &gt; 0 with B8 &lt; 0.25</td><td>Scar looks like soil/rock or ponded debris</td></tr>
   <tr><td>Minimum cluster</td><td>5 px ≈ 500 m²</td><td>Smaller fragments are noise</td></tr>
   <tr><td>Cloud mask</td><td>Cloud Score+ (<code>linkCollection</code>)</td><td>Replaced s2cloudless join, which ran out of memory on long stacks</td></tr>
+  </tbody>
 </table>
 
 <h2>Limits to keep in mind</h2>
@@ -89,8 +95,10 @@ as for floods.
 
 <h2>Outputs</h2>
 <table>
-  <tr><th>Asset</th><th>Content</th></tr>
+  <thead><tr><th>Asset</th><th>Content</th></tr></thead>
+  <tbody>
   <tr><td><code>landslidemask_&lt;event_id&gt;</code></td><td>Binary landslide extent, 10 m (band <code>flooded</code>, shared schema)</td></tr>
+  </tbody>
 </table>
 
 </main>
