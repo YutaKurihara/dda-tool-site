@@ -47,10 +47,13 @@ valuation engine. The full source is embedded below.
 </table>
 
 <p class="muted">
-To run it interactively, open the script in the GEE Code Editor and press
-Run — it reads constants and assets only, performs no batch computation and
-writes nothing.
+The app below is the script running live — it reads constants and assets
+only, performs no batch computation and writes nothing.
 </p>
+
+<h2>Live inspector</h2>
+
+<div class="app-frame-wrap" id="app-slot" style="height:80vh;border:1px solid var(--line);border-radius:4px;overflow:hidden"></div>
 
 <h2>Source</h2>
 
@@ -68,6 +71,8 @@ writes nothing.
   BNPB × JICA technical cooperation — Google Earth Engine implementation.
 </footer>
 
+<script src="assets/config.js"></script>
+<script>mountApp('datacheck');</script>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
 <script>
 fetch('code/07_datacheck.js')
