@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flood mapping — DDA Tool</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a class="brand" href="index.html">DDA Tool</a>
+  <a class="navlink" href="index.html">Home</a>
+  <a class="navlink" href="dashboard.html">Dashboard</a>
+  <a class="navlink active" href="flood.html">Flood</a>
+  <a class="navlink" href="landslide.html">Landslide</a>
+  <a class="navlink" href="earthquake.html">Earthquake</a>
+  <a class="navlink" href="datacheck.html">Data Check</a>
+</nav>
+
+<main class="page">
+
+<h1>Flood extent and water depth</h1>
+<p class="lead">
+Sentinel-1 radar change detection maps <em>where</em> the water is;
+the FwDET algorithm then estimates <em>how deep</em> it is. Both rasters are
+produced at 10&nbsp;m in a single export
+(<code>02_event/01_flood_detection.js</code>).
+</p>
+
+<h2>1&nbsp;· Flood extent — Sentinel-1 change detection</h2>
+
+<p>
+Radar penetrates clouds, which is decisive during a flood event when optical
+satellites see nothing. The detector follows the
+<a href="https://un-spider.org/advisory-support/recommended-practices/recommended-practice-google-earth-engine-flood-mapping">UN-SPIDER
+recommended practice</a>: open water is a smooth surface that reflects the
+radar pulse away from the sensor, so flooded ground turns dark relative to its
+pre-event state.
+</p>
+
+<ol>
+  <li><b>Image selection</b> — Sentinel-1 GRD, IW mode, VV polarisation,
+      single orbit direction, filtered to the AOI. Two mosaics are built:
+      a <em>pre-event</em> window (dry reference) and a <em>post-event</em>
+      window (during/after the flood).</li>
+  <li><b>Speckle smoothing</b> — a focal median removes the salt-and-pepper
+      noise inherent to SAR.</li>
+  <li><b>Change ratio</b> — the pixel is flagged as flooded when
+      \( \sigma^0_{\text{pre}} / \sigma^0_{\text{post}} > 1.25 \)
+      (backscatter dropped by ≥ 25 %).</li>
+  <li><b>Refinement</b> — isolated pixel clusters are removed with a
+      connected-pixel filter, and steep terrain (where radar shadow mimics
+      water) is masked using a slope threshold.</li>
+</ol>
+
+<div class="note">
+<strong>Design choice:</strong> the JRC permanent-water mask is deliberately
+<em>not</em> subtracted. River channels overflowing their banks are part of the
+flood; removing "permanent water" would cut holes exactly where the flooding
+started.
+</div>
+
+<h3>Alternative input: pre-analysed flood polygons</h3>
+<p>
+When a flood map already exists (drone survey, provincial GIS office,
+UNOSAT), it can be uploaded as an Earth Engine table and rasterised onto the
+same 10&nbsp;m grid instead of running the SAR detection. Everything
+downstream — depth, valuation, dashboard — is identical.
+</p>
+
+<h2>2&nbsp;· Water depth — FwDET on a bare-earth DEM</h2>
+
+<p>
+Damage curves need depth, not just extent. The Floodwater Depth Estimation Tool
+(<a href="https://doi.org/10.1111/1752-1688.12609">FwDET, Cohen et&nbsp;al.
+2018</a>, v2.1) reconstructs the water surface from the flood boundary:
+</p>
+
+<ol>
+  <li>Take the ground elevation along the flood-extent <em>boundary</em> —
+      by definition the water surface elevation there.</li>
+  <li>Interpolate that boundary elevation across the interior of the flooded
+      area (implemented with a cumulative-cost spread in Earth Engine).</li>
+  <li>Subtract the DEM: <span class="eq" style="display:inline-block;padding:0.2rem 0.7rem;margin:0">
+      \( \text{depth} = \text{water surface} - \text{ground elevation} \)</span></li>
+</ol>
+
+<p>
+The DEM is <b>FABDEM</b> (30&nbsp;m): Copernicus GLO-30 with forest canopy and
+building heights removed by machine learning
+(<a href="https://doi.org/10.1088/1748-9326/ac4d4f">Hawker et&nbsp;al.
+2022</a>). FwDET needs bare-earth ground elevation — a surface model that
+includes rooftops and tree crowns would systematically distort depths in
+exactly the urban and vegetated areas that matter most.
+</p>
+
+<h2>Key parameters</h2>
+
+<table>
+  <tr><th>Parameter</th><th>Value</th><th>Where</th></tr>
+  <tr><td>Change-ratio threshold</td><td>1.25</td><td><code>01_flood_detection.js</code></td></tr>
+  <tr><td>Polarisation / mode</td><td>VV, IW, single orbit</td><td><code>01_flood_detection.js</code></td></tr>
+  <tr><td>DEM</td><td>FABDEM 30 m (fixed, no user choice)</td><td><code>01_constants.js</code></td></tr>
+  <tr><td>Output grid</td><td>10 m (mask and depth)</td><td>export settings</td></tr>
+  <tr><td>Facility "affected" test</td><td>area-weighted mean depth ≥ 0.30 m</td><td><code>THRESHOLDS.facility_depth_m</code></td></tr>
+</table>
+
+<h2>Outputs</h2>
+<table>
+  <tr><th>Asset</th><th>Content</th></tr>
+  <tr><td><code>floodmask_&lt;event_id&gt;</code></td><td>Binary flood extent, 10 m</td></tr>
+  <tr><td><code>flooddepth_&lt;event_id&gt;</code></td><td>Water depth in metres (Float32), 10 m</td></tr>
+</table>
+
+<h2>References</h2>
+<ul>
+  <li>UN-SPIDER (2019). <i>Recommended Practice: Flood Mapping and Damage Assessment Using Sentinel-1 SAR Data in Google Earth Engine.</i></li>
+  <li>Cohen, S. et&nbsp;al. (2018). Estimating Floodwater Depths from Flood Inundation Maps and Topography. <i>JAWRA</i> 54(4).</li>
+  <li>Hawker, L. et&nbsp;al. (2022). A 30 m global map of elevation with forests and buildings removed. <i>Environ.&nbsp;Res.&nbsp;Lett.</i> 17&nbsp;024016.</li>
+</ul>
+
+</main>
+
+<footer class="site">
+  BNPB × JICA technical cooperation — Google Earth Engine implementation.
+</footer>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}]});"></script>
+</body>
+</html>

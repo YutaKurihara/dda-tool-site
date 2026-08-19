@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Landslide mapping — DDA Tool</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a class="brand" href="index.html">DDA Tool</a>
+  <a class="navlink" href="index.html">Home</a>
+  <a class="navlink" href="dashboard.html">Dashboard</a>
+  <a class="navlink" href="flood.html">Flood</a>
+  <a class="navlink active" href="landslide.html">Landslide</a>
+  <a class="navlink" href="earthquake.html">Earthquake</a>
+  <a class="navlink" href="datacheck.html">Data Check</a>
+</nav>
+
+<main class="page">
+
+<h1>Landslide extent</h1>
+<p class="lead">
+A landslide strips vegetation and exposes bare soil or rock. The detector
+(<code>02_event/02_landslide_detection.js</code>) finds this signature in
+Sentinel-2 optical imagery as a sharp drop in vegetation index, confirmed by a
+bare-soil or water signal.
+</p>
+
+<h2>Detection logic</h2>
+
+<ol>
+  <li><b>Image pairs</b> — cloud-free Sentinel-2 composites are built for a
+      window before and after the event date. Clouds are masked per pixel with
+      Google's <b>Cloud Score+</b> dataset, which is far more robust in the
+      humid tropics than classic QA bitmasks.</li>
+  <li><b>Vegetation loss</b> — a pixel is a candidate when NDVI drops by more
+      than 0.25 <em>and</em> the pre-event NDVI was above 0.5 (it must have
+      been vegetated to begin with — this suppresses false alarms on fields
+      and settlements).</li>
+  <li><b>Surface confirmation</b> — the candidate is kept only if the
+      post-event surface looks like a slide scar:
+      bare soil (BSI &gt; 0.05) or newly wet/ponded ground
+      (MNDWI &gt; 0 with low NIR reflectance).</li>
+  <li><b>Cleanup</b> — a morphological <code>focal_min</code> removes
+      single-pixel speckle and a minimum-cluster filter (≥ 5 pixels ≈
+      500 m²) removes fragments smaller than any damaging slide.</li>
+</ol>
+
+<h2>From extent to damage</h2>
+
+<p>
+Unlike a flood, a landslide has no depth gradient that maps onto a
+depth–damage curve — anything caught in the slide mass or scar is effectively
+destroyed. The pipeline encodes this with a simple convention:
+</p>
+
+<div class="note">
+<strong>Total-loss convention:</strong> the detector exports only a mask
+(<code>landslidemask_&lt;id&gt;</code>, no depth asset). The valuation engine
+synthesises a constant 10&nbsp;m depth inside the mask; every damage curve
+saturates at 100&nbsp;% well before 10&nbsp;m, so all exposed assets inside
+the extent are valued at full reconstruction cost. No special-case code paths
+exist downstream — Stage&nbsp;2 and the dashboard are byte-for-byte the same
+as for floods.
+</div>
+
+<h2>Key parameters</h2>
+
+<table>
+  <tr><th>Parameter</th><th>Value</th><th>Rationale</th></tr>
+  <tr><td>NDVI drop</td><td>&gt; 0.25</td><td>Sharp vegetation loss, robust to seasonal variation</td></tr>
+  <tr><td>Pre-event NDVI</td><td>&gt; 0.5</td><td>Must have been vegetated (excludes fields, urban)</td></tr>
+  <tr><td>Bare-soil check</td><td>BSI &gt; 0.05, or MNDWI &gt; 0 with B8 &lt; 0.25</td><td>Scar looks like soil/rock or ponded debris</td></tr>
+  <tr><td>Minimum cluster</td><td>5 px ≈ 500 m²</td><td>Smaller fragments are noise</td></tr>
+  <tr><td>Cloud mask</td><td>Cloud Score+ (<code>linkCollection</code>)</td><td>Replaced s2cloudless join, which ran out of memory on long stacks</td></tr>
+</table>
+
+<h2>Limits to keep in mind</h2>
+<ul>
+  <li>Optical detection needs at least one usable clear scene after the event —
+      in persistent cloud the map is delayed until one exists.</li>
+  <li>Slides under intact forest canopy, or smaller than ~500 m², are not
+      detected.</li>
+  <li>The event id carries the <code>landslide_</code> prefix; the engine and
+      dashboard route the total-loss convention from this prefix alone.</li>
+</ul>
+
+<h2>Outputs</h2>
+<table>
+  <tr><th>Asset</th><th>Content</th></tr>
+  <tr><td><code>landslidemask_&lt;event_id&gt;</code></td><td>Binary landslide extent, 10 m (band <code>flooded</code>, shared schema)</td></tr>
+</table>
+
+</main>
+
+<footer class="site">
+  BNPB × JICA technical cooperation — Google Earth Engine implementation.
+</footer>
+</body>
+</html>

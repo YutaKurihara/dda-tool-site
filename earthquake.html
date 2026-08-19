@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Earthquake damage — DDA Tool</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a class="brand" href="index.html">DDA Tool</a>
+  <a class="navlink" href="index.html">Home</a>
+  <a class="navlink" href="dashboard.html">Dashboard</a>
+  <a class="navlink" href="flood.html">Flood</a>
+  <a class="navlink" href="landslide.html">Landslide</a>
+  <a class="navlink active" href="earthquake.html">Earthquake</a>
+  <a class="navlink" href="datacheck.html">Data Check</a>
+</nav>
+
+<main class="page">
+
+<h1>Earthquake building collapse — RV-PWTT</h1>
+<p class="lead">
+Building collapse changes how a pixel scatters radar and reflects light. The
+detector (<code>02_event/03_earthquake_detection.js</code>) measures that
+change with a pixel-wise <i>t</i>-statistic scaled by the <em>pre-event</em>
+variability only — a variant of the PWTT approach popularised by
+<a href="https://oballinger.github.io/PWTT/">Ballinger's damage assessments
+in Ukraine and Turkey</a>.
+</p>
+
+<h2>The statistic</h2>
+
+<p>
+For each pixel and each channel, a one-year pre-event stack gives a mean
+\( m_{\text{pre}} \) and standard deviation \( s_{\text{pre}} \); the
+post-event images give \( m_{\text{post}} \). The change statistic is
+</p>
+
+<div class="eq">
+$$T \;=\; \frac{\lvert\, m_{\text{pre}} - m_{\text{post}} \,\rvert}
+{\,s_{\text{pre}} \cdot \sqrt{ \tfrac{1}{n_{\text{pre}}} + \tfrac{1}{n_{\text{post}}} }\,}$$
+</div>
+
+<p>
+The denominator uses the pre-event spread <em>alone</em> — "reference
+variance", the RV in RV-PWTT. Because the post-event variance never enters,
+the statistic is meaningful from the <b>very first post-event image</b>.
+That is the property that matters in early response: no waiting for a stack
+of after-images, no training data, no damage labels.
+</p>
+
+<ul>
+  <li><b>SAR channels</b> — Sentinel-1 VV and VH per orbit, Lee-filtered;
+      \(T_{\text{sar}}\) is the maximum over channels.</li>
+  <li><b>Optical channels (optional)</b> — six Sentinel-2 spectral/texture
+      features, cloud-masked per pixel (Cloud Score+ cs_cdf ≥ 0.6, scenes
+      &lt; 40 % cloud); \(T_{\text{opt}}\) is the maximum over features.</li>
+</ul>
+
+<h2>Decision rule and operating points</h2>
+
+<p>
+A building pixel is flagged <b>collapsed</b> when either statistic exceeds its
+threshold (OR rule). A pixel whose optical side is lost to cloud falls back to
+the SAR test alone, so the map never has cloud holes. The verdict is
+deliberately binary — collapsed / not collapsed, no intermediate grade.
+</p>
+
+<table>
+  <tr><th>Operating point</th><th>T<sub>sar</sub></th><th>T<sub>opt</sub></th><th>Precision</th><th>Recall</th><th>Use case</th></tr>
+  <tr><td><b>F2</b> (default)</td><td>5.8</td><td>4.5</td><td>0.48</td><td>0.81</td><td>Early response — a missed collapsed building costs more than a false alarm</td></tr>
+  <tr><td><b>F1</b></td><td>10.9</td><td>5.5</td><td>0.67</td><td>0.66</td><td>Balanced reporting</td></tr>
+</table>
+
+<p>
+Both points were calibrated by a full threshold sweep against the
+2023 Kahramanmaraş earthquake (Copernicus EMSR648, 4,619 graded buildings).
+</p>
+
+<div class="note">
+<strong>Calibration caveat:</strong> the thresholds are tuned on Turkish
+building stock and have not yet been re-calibrated for Indonesian
+construction. Treat absolute counts with care until Indonesian ground truth
+is incorporated.
+</div>
+
+<h2>Sensor modes</h2>
+<ul>
+  <li><b>SAR + Optical</b> — the calibrated configuration (OR rule).</li>
+  <li><b>SAR only</b> — lighter and available from the first Sentinel-1 pass;
+      uses the same \(T_{\text{sar}}\) threshold, slightly conservative on
+      its own.</li>
+</ul>
+
+<h2>Display and outputs</h2>
+
+<p>
+The preview shows a smoothed \(T_{\text{sar}}\) heat map (yellow → red →
+purple, like the public PWTT app) wherever \(T_{\text{sar}} \geq 2.7\), the
+99&nbsp;% significance point — an intuitive "estimated damage" picture. The
+binary collapse extent that Stage&nbsp;2 actually values is a separate
+toggleable layer.
+</p>
+
+<p>
+As with landslides, the export is a mask only
+(<code>quakemask_&lt;id&gt;</code>, event ids prefixed <code>quake_</code>).
+The valuation engine applies the total-loss convention: collapsed footprint
+area × unit cost × 100&nbsp;%. Building overlap happens in the damage engine,
+not in the detector.
+</p>
+
+<table>
+  <tr><th>Asset</th><th>Content</th></tr>
+  <tr><td><code>quakemask_&lt;event_id&gt;</code></td><td>Binary collapse extent, 10 m (band <code>flooded</code>, shared schema)</td></tr>
+</table>
+
+<h2>References</h2>
+<ul>
+  <li>Ballinger, O. — Pixel-Wise T-Test (PWTT) building damage assessment
+      (<a href="https://oballinger.github.io/PWTT/">project site</a>).</li>
+  <li>Copernicus EMS EMSR648 — Kahramanmaraş earthquake grading dataset
+      (calibration ground truth).</li>
+</ul>
+
+</main>
+
+<footer class="site">
+  BNPB × JICA technical cooperation — Google Earth Engine implementation.
+</footer>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}]});"></script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Check — DDA Tool</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a class="brand" href="index.html">DDA Tool</a>
+  <a class="navlink" href="index.html">Home</a>
+  <a class="navlink" href="dashboard.html">Dashboard</a>
+  <a class="navlink" href="flood.html">Flood</a>
+  <a class="navlink" href="landslide.html">Landslide</a>
+  <a class="navlink" href="earthquake.html">Earthquake</a>
+  <a class="navlink active" href="datacheck.html">Data Check</a>
+</nav>
+
+<main class="page" style="padding-bottom:1.5rem">
+
+<h1>Data Check — inspect every number the tool uses</h1>
+<p class="lead">
+A damage estimate is only as credible as its inputs. The Data Check app
+(<code>01_shared/07_datacheck.js</code>) is a read-only inspector that lays
+out every unit cost, curve and threshold — with its source — so reviewers can
+audit the tool without reading code.
+</p>
+
+<h2>What it shows</h2>
+<table>
+  <tr><th>Section</th><th>Content</th></tr>
+  <tr><td>Unit Costs</td><td>The 100 %-damage reconstruction cost of every class, each tagged with its provenance: <code>[G]</code> statistics-based, <code>[E]</code> recovery-budget request, <code>[Furukawa]</code> expert proposal — traceable to <code>dataset_inventory.xlsx</code> and the government source PDFs (DKI SHST 2025, HSPK, PermenPUPR, BPS).</td></tr>
+  <tr><td>DDF Curves</td><td>All 13 depth–damage functions (JRC Huizinga 2017, Asia set) plotted from their control points.</td></tr>
+  <tr><td>Province Ratio</td><td>The BPS IKK 2025 construction-cost index per province (DKI Jakarta = 1.00) applied to all region-priced classes.</td></tr>
+  <tr><td>Exposure</td><td>The 37 exposure assets (facilities, roads, land use, buildings) with feature counts, so missing or stale layers are caught before an event, not during one.</td></tr>
+  <tr><td>Sanity Test</td><td>A worked example — one house in Jakarta flooded to 1.5 m — computed live, so the whole chain (cost × DDF × ratio) can be verified by hand.</td></tr>
+  <tr><td>Engine Test</td><td>Regression checks of the valuation engine: pixel-wise DDF vs. scalar DDF agreement, a hand-calculated damage case, the WorldPop scale test (guards against a ×100 population bug), and old-vs-new engine totals on a reference event.</td></tr>
+</table>
+
+<p class="muted">
+The app performs no batch computation and writes nothing — it reads constants
+and assets, so it opens instantly and is safe to share.
+</p>
+
+</main>
+
+<div class="app-frame-wrap" id="app-slot" style="height:85vh"></div>
+
+<footer class="site">
+  BNPB × JICA technical cooperation — Google Earth Engine implementation.
+</footer>
+
+<script src="assets/config.js"></script>
+<script>mountApp('datacheck');</script>
+</body>
+</html>
