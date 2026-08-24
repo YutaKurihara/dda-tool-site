@@ -52,10 +52,10 @@ produce an estimate.
   <li><b>An Earth Engine account</b> with access to the Cloud project that
       owns the Assets. Reading the published dashboard needs nothing; running
       the pipeline needs write access.</li>
-  <li><b>The scripts, in the Code Editor.</b> They are organised in three
-      folders that map onto the three stages, plus one shared library:
-      <code>01_shared/</code>, <code>02_event/</code>,
-      <code>03_dashboard/</code>.</li>
+  <li><b>The scripts, in the Code Editor.</b> Three folders, numbered in
+      dependency order: <code>01_shared/</code> (the library everything else
+      requires), <code>02_event/</code> (the per-event work — Stage 1 and
+      Stage 2), <code>03_dashboard/</code> (Stage 3). See §2.</li>
   <li><b>The Code Editor, not the published app.</b> A published Earth Engine
       App cannot queue <code>Export</code> tasks. The dashboard's CSV
       downloads work in the app (they use a direct download URL), but every
@@ -74,24 +74,60 @@ multi-hour batch task — start it and come back.
 
 <h2>2 · The map of the tool</h2>
 
+<p>
+The folder numbers are the dependency order, which is why they read
+01&nbsp;→&nbsp;02&nbsp;→&nbsp;03: the shared library comes first because
+everything else requires it, the per-event scripts come next, and the
+dashboard last because it only reads what they produced.
+</p>
+
+<p>
+<b>You only ever open four of these</b> — the three detectors and the
+dashboard, plus Data Check when you want to inspect the inputs. Everything in
+<code>01_shared/01–06</code> is library code that the others
+<code>require()</code>; you edit it when a cost or a threshold changes, never
+to run an assessment.
+</p>
+
 <table>
   <thead><tr><th>Script</th><th>What it does</th></tr></thead>
   <tbody>
-  <tr><td><code>02_event/01_flood_detection.js</code></td>
-      <td>Stage 1 — flood extent + water depth</td></tr>
-  <tr><td><code>02_event/02_landslide_detection.js</code></td>
-      <td>Stage 1 — landslide extent + road closures</td></tr>
-  <tr><td><code>02_event/03_earthquake_detection.js</code></td>
-      <td>Stage 1 — building-collapse extent</td></tr>
-  <tr><td><code>02_event/04_damage_calculation.js</code></td>
-      <td>Stage 2 — the valuation run</td></tr>
-  <tr><td><code>03_dashboard/01_dashboard.js</code></td>
-      <td>Stage 3 — viewer, CSV exports, GIS exports, asset sharing</td></tr>
+  <tr><td><code>01_shared/01_constants.js</code></td>
+      <td>Library — every Asset path, the exposure catalog, the policy
+          thresholds, and the hazard routing that turns an event id into the
+          right Assets. The single source of truth for where things
+          are.</td></tr>
+  <tr><td><code>01_shared/02_unit_costs.js</code></td>
+      <td>Library — Indonesian unit costs at 100&nbsp;% damage, and the
+          per-province construction-cost ratios.</td></tr>
+  <tr><td><code>01_shared/03_damage_curves.js</code></td>
+      <td>Library — the depth–damage functions, and the per-pixel evaluation
+          the engine uses.</td></tr>
+  <tr><td><code>01_shared/04_damage_classes.js</code></td>
+      <td>Library — the catalog of what gets valued: each damage class with
+          its exposure layers, curve, unit cost and DIBI column. Adding a
+          class is a data edit here.</td></tr>
+  <tr><td><code>01_shared/05_flood_depth.js</code></td>
+      <td>Library — the FwDET water-depth algorithm. Used by the flood
+          detector only.</td></tr>
+  <tr><td><code>01_shared/06_damage_calc.js</code></td>
+      <td>Library — the damage engine. Every rupiah figure, facility count,
+          housing grade and population indicator comes out of here, for all
+          three hazards.</td></tr>
   <tr><td><code>01_shared/07_datacheck.js</code></td>
-      <td>Inspector for every unit cost, curve, threshold and Asset</td></tr>
-  <tr><td><code>01_shared/01–06</code></td>
-      <td>Shared library: asset paths, unit costs, damage curves, class
-          catalog, depth algorithm, damage engine</td></tr>
+      <td><b>Screen</b> — inspector for every unit cost, curve, threshold and
+          Asset. See §6.</td></tr>
+  <tr><td><code>02_event/01_flood_detection.js</code></td>
+      <td><b>Screen</b> — Stage 1: flood extent + water depth.</td></tr>
+  <tr><td><code>02_event/02_landslide_detection.js</code></td>
+      <td><b>Screen</b> — Stage 1: landslide extent + road closures.</td></tr>
+  <tr><td><code>02_event/03_earthquake_detection.js</code></td>
+      <td><b>Screen</b> — Stage 1: building-collapse extent.</td></tr>
+  <tr><td><code>02_event/04_damage_calculation.js</code></td>
+      <td><b>Screen</b> — Stage 2: the valuation run.</td></tr>
+  <tr><td><code>03_dashboard/01_dashboard.js</code></td>
+      <td><b>Screen</b> — Stage 3: viewer, CSV exports, GIS exports and Asset
+          sharing. This is the one published as an App.</td></tr>
   </tbody>
 </table>
 
