@@ -1,36 +1,15 @@
 /**
  * 01_shared/07_datacheck.js — read-only inspector for the shared constants.
+ * Sanity-checks the inputs feeding 06_damage_calc.js; renders instantly
+ * because (except the Engine Test) every value is client-side.
  *
- * Purpose:
- *   Sanity-check the inputs that feed 06_damage_calc.js BEFORE running a
- *   per-event pipeline. Nothing in this file does any server-side
- *   computation (no ee.Reducer, no reduceRegions, no Export). Render is
- *   instant because every value is already on the client side.
+ * Sections (dropdown): Unit Costs (with source references) · DDF Curves ·
+ * Province Ratio · Crops & Fish · Exposure (asset inventory) · Sanity Test
+ * (worked example) · Engine Test (rewrite verification).
  *
- * Sections (chosen from the dropdown at the top of the page):
- *
- *     Unit Costs      — every entry of UC.* with its source reference
- *                       (Cost sheet Column G, or the Column J reference
- *                        cited by its primary source and marked [J]).
- *     DDF Curves      — line chart for one curve OR an overlay of all,
- *                       plus a depth-vs-ratio table at common depths.
- *     Province Ratio  — UC.PROVINCE_RATIO (BPS IKK 2025), the single
- *                       regional cost multiplier used by damage_calc.
- *     Crops & Fish    — per-m² crop / aquaculture production values.
- *     Exposure        — every GIS asset path used by the pipeline with
- *                       producing K/L, feature count, DIBI column it feeds.
- *     Sanity Test     — worked example: 1 house @ 1.5 m flood in Jakarta,
- *                       then the same calc across provinces to show how
- *                       PROVINCE_RATIO changes the result.
- *
- * Structure: a single `render(sectionName)` dispatcher routes to one
- * renderXxx() function per section. Each only writes UI widgets to `content`.
- *
- * Chrome (2026-08-07): full-screen dashboard styling shared with
- * 01_dashboard.js — dark header bar with the section selector, a KPI tile
- * row (all counts client-side), a white content card, zebra-striped tables,
- * and client-side charts (DDF curves, province ratios, crop values, damage
- * vs depth) on the validated data-viz palette.
+ * Structure: render(sectionName) dispatches to one renderXxx() per
+ * section; each only writes UI widgets to `content`. Styling shared with
+ * 01_dashboard.js.
  */
 
 var UC  = require('users/kurihara-yt/dibi:01_shared/02_unit_costs');
@@ -97,14 +76,9 @@ function makeKpiTile(caption, value, sub, valueColor, width) {
 
 
 // ====================================================================
-// References — mapping from each unit-cost key to its source.
-// Values updated 2026-07-03 to Cost sheet Column G ("from Statistical Data
-// etc.") for classes where G is available, back-calculated to 100 % base
-// cost for damage-level tiered items. Where G is empty the Column J
-// reference value is retained, but cited by the PRIMARY source that the
-// Furukawa Excel itself referenced (SHST, AHSP Bina Marga, PLN RUPTL,
-// KLHK, KKP, ...) and marked "[J]" — per dataset_inventory.xlsx Cost
-// sheet, "Reference / source" column (2026-08-07).
+// References — each unit-cost key mapped to its source (Cost sheet Column
+// G where available; [J] entries cite the primary source the Furukawa
+// Excel itself referenced; see dataset_inventory.xlsx).
 // ====================================================================
 var REF = {
   // C-4 Housing
@@ -112,6 +86,9 @@ var REF = {
   'HOUSING.avg_floor_m2':'BPS Susenas typical simple housing',
   'HOUSING.furniture_per_hh': 'BPS Susenas per-capita non-food exp. proxy',
   'HOUSING.utility_per_unit': 'PLN new connection (1300 VA)',
+  'HOUSING.persons_per_house':
+      'BPS SP2020 average household size — drives the EARTHQUAKE population ' +
+      '(building count x this). Assumes 1 household per building.',
   // C-5 Infra buildings
   'INFRA.health_per_m2':       'SHST Gedung Tidak Sederhana [G]',
   'INFRA.puskesmas_per_m2':    'SHST Gedung Sederhana [G]',
@@ -338,19 +315,13 @@ function render(name) {
 
 
 // ====================================================================
-// 7) ENGINE TEST — verification for the 2026-08-05 damage-engine rewrite.
-//
-// The rewrite changed two things that cannot be eyeballed: the DDF moved
-// from a scalar evaluated on each district's mean depth to an image
-// evaluated per pixel, and population moved onto its own 100 m pass. Both
-// are the kind of change that produces plausible-looking wrong numbers, so
-// each has a test here that fails loudly.
-//
-//   T1  evaluateImage vs evaluate     — the image and scalar implementations
-//                                       must agree on every curve
-//   T2  hand calculation              — one house, checked with a calculator
-//   T3  population scale              — catches the 100× resolution trap
-//   T4  old vs new engine             — per-class deltas on a real event
+// 7) ENGINE TEST — verification for the damage-engine rewrite (per-pixel
+// DDF + separate 100 m population pass both produce plausible-looking
+// wrong numbers when broken, so each test fails loudly):
+//   T1  evaluateImage vs evaluate (all curves must agree)
+//   T2  hand calculation (one house, checked with a calculator)
+//   T3  population scale (catches the 100× resolution trap)
+//   T4  the per-city measurements on a real event
 // ====================================================================
 function renderEngineTest() {
   content.add(ui.Label('Engine Test — 2026-08-05 rewrite verification', {
@@ -438,7 +409,10 @@ function renderEngineTest() {
   content.add(ui.Label(
     'T3 is the 100× guard: WorldPop is a 100 m people-per-pixel grid, so ' +
     'reducing it at 10 m would replicate every value 100 times. Exposed ' +
-    'population must never exceed the districts\' total population.',
+    'population must never exceed the districts\' total population. ' +
+    'It checks the WorldPop path — floods and landslides. An earthquake\'s ' +
+    'published population comes from building counts instead, so this ' +
+    'test does not cover it.',
     {fontSize: '10px', color: '777', margin: '0 0 4px 0'}));
 
   var evtBox = ui.Textbox({
@@ -481,12 +455,9 @@ function renderEngineTest() {
         .filter(ee.Filter.eq('year', CLS.POPULATION.year))
         .filterBounds(mask.geometry());
 
-      // Summed on WorldPop's own grid, read from a member rather than from the
-      // mosaic. Two traps here, and this test is worthless if it falls into
-      // either: mosaic() reports EPSG:4326 at 1 degree, and a rounded 100 m
-      // grid misses ~14 % of the 92.8 m cells. Either would drag the CEILING
-      // down and make a correct result look like a failure — a test that cries
-      // wolf is worse than no test.
+      // Summed on WorldPop's own grid, read from a MEMBER (mosaic() reports
+      // EPSG:4326 @ 1°; a rounded 100 m grid misses ~14 % of cells — either
+      // would drag the ceiling down and make a correct result look failed).
       var popProj = ee.Image(popIC.first()).projection();
       totalPop = popIC.mosaic().reduceRegions({
         collection: adm2, reducer: ee.Reducer.sum().setOutputs(['pop']),
@@ -614,6 +585,8 @@ function renderUnitCosts() {
   content.add(refRow('avg floor area', UC.HOUSING.avg_floor_m2 + ' m²', 'HOUSING.avg_floor_m2'));
   content.add(refRow('furniture / HH', idr(UC.HOUSING.furniture_per_hh), 'HOUSING.furniture_per_hh'));
   content.add(refRow('utility / unit', idr(UC.HOUSING.utility_per_unit), 'HOUSING.utility_per_unit'));
+  content.add(refRow('occupants / house',
+    UC.HOUSING.persons_per_house + ' people', 'HOUSING.persons_per_house'));
 
   content.add(head('C-5 Sosial (Buildings, 100 % base)'));
   content.add(tblHead());
@@ -1007,6 +980,11 @@ function renderExposure() {
           'health_damaged', 'damage class "health" (polygon_area_m2)'],
         ['Puskesmas',    C.EXPOSURE_POLY.puskesmas,  '9,837',
           'health_damaged', 'damage class "health"'],
+        ['Klinik (OSM)', C.EXPOSURE_POLY.clinics,    '4,780',
+          'health_damaged',
+          'HOTOSM export via HDX (ODbL). Name-filtered, then deduped 200 m ' +
+          'against the two layers above — OSM double-tags many puskesmas ' +
+          'and hospitals as clinics, and D-2 counts units.'],
       ],
     },
     {
@@ -1183,6 +1161,80 @@ function renderExposure() {
     'submerged, house_damaged, education_damaged, health_damaged, ' +
     'electricity_network_damaged, road_impacted, ' +
     'rice_field_impacted, land_impacted, plantation_impacted, forest_impacted'));
+
+  // ---- Do these Assets actually exist? ----
+  //
+  // A source Asset that is missing does NOT degrade quietly: the whole run
+  // stops with "Collection.loadTable: Collection asset ... not found", and
+  // it stops inside the damage engine, far from the catalog entry that
+  // caused it. This is the check to run after any Asset is added, renamed
+  // or moved — and before trusting a valuation built on them.
+  //
+  // Probed ASYNCHRONOUSLY (ee.data.getAsset with a callback): 40-odd
+  // synchronous round trips would freeze the page, and the results would
+  // all land at once instead of filling in as they arrive.
+  content.add(head('Are these Assets actually there?'));
+  content.add(note('One probe per Asset the pipeline names. Nothing is ' +
+    'checked until you press the button — the rest of this page stays ' +
+    'client-side and instant.'));
+
+  var verifyBtn = ui.Button({label: 'Verify every Asset'});
+  content.add(verifyBtn);
+  var verifyHolder = ui.Panel({style: {margin: '4px 0 0 12px'}});
+  content.add(verifyHolder);
+
+  verifyBtn.onClick(function() {
+    verifyHolder.clear();
+    verifyBtn.setDisabled(true);
+
+    var targets = [];
+    Object.keys(C.EXPOSURE_POLY).forEach(function(k) {
+      targets.push({label: 'EXPOSURE_POLY.' + k, id: C.EXPOSURE_POLY[k]});
+    });
+    ['adm1', 'adm2', 'adm3', 'lulc'].forEach(function(k) {
+      targets.push({label: 'ASSETS.' + k, id: C.ASSETS[k]});
+    });
+
+    var summary = ui.Label('Checking ' + targets.length + ' Assets...',
+      {fontSize: '11px', fontWeight: 'bold', color: COL.inkSoft,
+       margin: '0 0 4px 0'});
+    verifyHolder.add(summary);
+
+    var done = 0, missing = 0;
+    _z = 0;
+    targets.forEach(function(t) {
+      var bg = zbg();
+      var line = ui.Panel([
+        ui.Label(t.label, {fontSize: '11px', width: '240px',
+                           color: COL.inkSoft, backgroundColor: bg}),
+        ui.Label('checking...', {fontSize: '11px', width: '110px',
+                                 color: COL.muted, backgroundColor: bg}),
+        ui.Label(t.id.split('/').pop(), {fontSize: '10px', color: COL.muted,
+                                         fontStyle: 'italic',
+                                         backgroundColor: bg}),
+      ], ui.Panel.Layout.flow('horizontal'),
+         {margin: '0', padding: '1px 4px', backgroundColor: bg});
+      verifyHolder.add(line);
+
+      ee.data.getAsset(t.id, function(res, err) {
+        var ok = !err && !!res;
+        if (!ok) missing++;
+        line.widgets().get(1)
+          .setValue(ok ? '✓ present' : '✗ NOT FOUND')
+          .style().set('color', ok ? COL.good : COL.critical);
+        done++;
+        if (done === targets.length) {
+          summary.setValue(missing === 0
+            ? '✓ all ' + targets.length + ' Assets present'
+            : '✗ ' + missing + ' of ' + targets.length + ' MISSING — the ' +
+              'pipeline will stop on the first one it reaches. Ingest it, ' +
+              'or drop it from the catalog in 01_constants.js.');
+          summary.style().set('color', missing === 0 ? COL.good : COL.critical);
+          verifyBtn.setDisabled(false);
+        }
+      });
+    });
+  });
 }
 
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>About — DDA Tool</title>
+<title>Manual — DDA Tool</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=Source+Sans+3:wght@400;600&display=swap">
 <link rel="stylesheet" href="assets/style.css">
@@ -17,67 +17,192 @@
   <a class="navlink" href="landslide.html">Landslide</a>
   <a class="navlink" href="earthquake.html">Earthquake</a>
   <a class="navlink" href="datacheck.html">Data Check</a>
-  <a class="navlink active" href="about.html">About</a>
+  <a class="navlink active" href="about.html">Manual</a>
 </nav>
 
 <main class="page">
 
 <div class="title-block">
-<h1>Satellite-based Disaster Damage Assessment for DIBI&nbsp;/&nbsp;Jitupasna</h1>
+<h1>Manual — running an assessment end to end</h1>
 <p class="lead">
-A Google Earth Engine tool that detects the footprint of floods, landslides
-and earthquakes from Sentinel-1/2 imagery, and converts it into monetary
-damage (IDR) following the Jitupasna post-disaster needs-assessment guideline
-(Perka BNPB No.15/2011) and the reporting items of BNPB's DIBI database.
+From a disaster report to a published DIBI&nbsp;/&nbsp;Jitupasna table and a
+GIS package, in the order you actually do it. Detection parameters and the
+science behind each hazard live on their own pages —
+<a href="flood.html">Flood</a>, <a href="landslide.html">Landslide</a>,
+<a href="earthquake.html">Earthquake</a>. This page is the operating
+procedure that surrounds them.
 </p>
 </div>
 
+<h2>0 · What the tool is, in one paragraph</h2>
+
 <p>
-Everything runs on Google Earth Engine — no local GIS software is needed to
-produce an estimate. Heavy computation is done once per event as a batch
-export; the <a href="index.html">dashboard</a> only reads the saved results,
-so it opens in seconds.
+A Google Earth Engine implementation of satellite-based post-disaster damage
+assessment for BNPB. It detects the footprint of a flood, landslide or
+earthquake from Sentinel-1/2 imagery, overlays that footprint on 38 curated
+exposure layers, and prices the damage in rupiah following the Jitupasna
+guideline (Perka BNPB No.&nbsp;15/2011) and the reporting items of the DIBI
+database. Everything runs on Earth Engine; no local GIS software is needed to
+produce an estimate.
 </p>
 
-<h2>How the pipeline works</h2>
+<h2>1 · Before you start</h2>
 
-<div class="pipeline">
-  <div class="stage">
-    <b>Stage 1 — Detection</b>
-    One script per hazard:
-    <a href="flood.html">flood</a> (Sentinel-1 change detection + water depth),
-    <a href="landslide.html">landslide</a> (Sentinel-2 vegetation loss),
-    <a href="earthquake.html">earthquake</a> (RV-PWTT building collapse).
-    Output: a 10&nbsp;m hazard mask (+ depth raster for floods).
-  </div>
-  <div class="arrow">→</div>
-  <div class="stage">
-    <b>Stage 2 — Valuation</b>
-    One shared damage engine overlays the hazard on 37 exposure layers
-    (buildings, roads, facilities, land use, population) and prices the damage
-    pixel by pixel. Output: one table per event
-    (<code>damage_value_&lt;id&gt;</code>).
-  </div>
-  <div class="arrow">→</div>
-  <div class="stage">
-    <b>Stage 3 — Reporting</b>
-    The <a href="index.html">dashboard</a> maps the results per district
-    (kabupaten/kota) and exports two CSVs: DIBI (wide, one row per district)
-    and Jitupasna (long, district × damage class).
-  </div>
+<ul>
+  <li><b>An Earth Engine account</b> with access to the Cloud project that
+      owns the Assets. Reading the published dashboard needs nothing; running
+      the pipeline needs write access.</li>
+  <li><b>The scripts, in the Code Editor.</b> They are organised in three
+      folders that map onto the three stages, plus one shared library:
+      <code>01_shared/</code>, <code>02_event/</code>,
+      <code>03_dashboard/</code>.</li>
+  <li><b>The Code Editor, not the published app.</b> A published Earth Engine
+      App cannot queue <code>Export</code> tasks. The dashboard's CSV
+      downloads work in the app (they use a direct download URL), but every
+      Asset export and every GIS export must be started from the Code
+      Editor.</li>
+</ul>
+
+<div class="note">
+<strong>Two clocks to keep in mind.</strong> Anything computed <em>on screen</em>
+is killed by Earth Engine after about five minutes, on every billing plan.
+Anything computed as a <em>batch export</em> has no such limit. The whole tool
+is arranged around that split: the expensive work happens once, in batch, and
+every screen afterwards only reads the result. A province-wide valuation is a
+multi-hour batch task — start it and come back.
 </div>
 
+<h2>2 · The map of the tool</h2>
+
+<table>
+  <thead><tr><th>Script</th><th>What it does</th></tr></thead>
+  <tbody>
+  <tr><td><code>02_event/01_flood_detection.js</code></td>
+      <td>Stage 1 — flood extent + water depth</td></tr>
+  <tr><td><code>02_event/02_landslide_detection.js</code></td>
+      <td>Stage 1 — landslide extent + road closures</td></tr>
+  <tr><td><code>02_event/03_earthquake_detection.js</code></td>
+      <td>Stage 1 — building-collapse extent</td></tr>
+  <tr><td><code>02_event/04_damage_calculation.js</code></td>
+      <td>Stage 2 — the valuation run</td></tr>
+  <tr><td><code>03_dashboard/01_dashboard.js</code></td>
+      <td>Stage 3 — viewer, CSV exports, GIS exports, asset sharing</td></tr>
+  <tr><td><code>01_shared/07_datacheck.js</code></td>
+      <td>Inspector for every unit cost, curve, threshold and Asset</td></tr>
+  <tr><td><code>01_shared/01–06</code></td>
+      <td>Shared library: asset paths, unit costs, damage curves, class
+          catalog, depth algorithm, damage engine</td></tr>
+  </tbody>
+</table>
+
 <p>
-The three stages communicate only through Earth Engine Assets, so adding a new
-hazard detector requires no change to the valuation engine or the dashboard —
-this is exactly how landslide and earthquake support were added.
+The three stages communicate <em>only</em> through Earth Engine Assets. That is
+why adding a hazard needs no change to the valuation engine or the dashboard —
+which is exactly how landslide and earthquake support were added.
 </p>
 
-<h2>How damage is priced</h2>
+<h2>3 · Stage 1 — detect the hazard</h2>
 
 <p>
-For every damage class (housing, health facilities, roads, rice fields, …) the
-engine evaluates, <em>at each 10&nbsp;m pixel</em>:
+Open the script for the hazard you are assessing. The three detectors share the
+same panel layout and the same workflow; only the detection parameters differ,
+and those are documented on the hazard pages.
+</p>
+
+<ol>
+  <li><b>Event ID.</b> A short slug, e.g. <code>jakarta_2025_nov</code>. The
+      script adds the hazard prefix and the export date for you, so what
+      actually gets written is
+      <code>flood_jakarta_2025_nov_20260824</code>. That full string is the
+      <em>event id</em> and it is the key every later stage uses. The date
+      stamp means re-running the same event on a later day never collides
+      with the earlier result.</li>
+  <li><b>Area of interest.</b> Three ways: pick a province and a
+      kabupaten/kota; pick a province and "(Whole province)"; or leave the
+      province blank and draw a polygon on the map.</li>
+  <li><b>Parameters.</b> Dates, thresholds, sensor mode — see the hazard
+      page.</li>
+  <li><b>Preview.</b> Renders the result on a coarser grid so it stays inside
+      the interactive time limit. A province-wide preview is deliberately
+      coarse and indicative; the export is the real thing. Use the preview to
+      check that you have the right dates, the right area, and a plausible
+      footprint — not to read areas off the screen.</li>
+  <li><b>Export.</b> Queues the Asset tasks. <b>Nothing runs until you open
+      the Tasks tab and press RUN on each one.</b> This is the step people
+      forget.</li>
+</ol>
+
+<h3>What each detector writes</h3>
+
+<table>
+  <thead><tr><th>Hazard</th><th>Assets</th><th>Tasks</th></tr></thead>
+  <tbody>
+  <tr><td>Flood</td>
+      <td><code>floodmask_&lt;id&gt;</code>,
+          <code>flooddepth_&lt;id&gt;</code></td><td>2</td></tr>
+  <tr><td>Landslide</td>
+      <td><code>landslidemask_&lt;id&gt;</code>,
+          <code>roadblock_&lt;id&gt;</code></td><td>2</td></tr>
+  <tr><td>Earthquake</td>
+      <td><code>quakemask_&lt;id&gt;</code></td><td>1</td></tr>
+  </tbody>
+</table>
+
+<p>
+Only floods get a depth raster. For landslides and earthquakes the engine
+synthesises a constant saturating depth inside the extent, so every damage
+curve reaches 100&nbsp;% — anything the hazard touched is treated as
+destroyed. That is the agreed treatment for both: a landslide removes what it
+crosses, and the earthquake verdict is binary collapsed / not collapsed by
+construction.
+</p>
+
+<p>
+<code>roadblock_&lt;id&gt;</code> is a point per contiguous stretch where the
+slide crosses a national, regional or toll road — a <em>possible</em> road
+closure, marked × on the dashboard. It is a satellite-detected overlap, not a
+confirmed closure; ground confirmation remains the operator's job.
+</p>
+
+<h2>4 · Stage 2 — value the damage</h2>
+
+<p>
+Open <code>02_event/04_damage_calculation.js</code>.
+</p>
+
+<ol>
+  <li><b>Refresh the list</b> and choose your event. An event only appears
+      once its Stage-1 Assets have finished exporting — for a flood that means
+      <em>both</em> the mask and the depth raster. If it is missing, your task
+      is still running (or you never pressed RUN).</li>
+  <li><b>Choosing it draws the extent</b> and the district boundaries, so you
+      can confirm you are about to value the right footprint.</li>
+  <li><b>Press "Value everything and store the result".</b> This queues two
+      independent batch tasks. RUN both.</li>
+  <li><b>Come back later.</b> A single kabupaten finishes in minutes; a whole
+      province can take hours. When the task is done, press "Refresh the list"
+      and select the event again — the numbers appear.</li>
+</ol>
+
+<table>
+  <thead><tr><th>Asset</th><th>Contents</th></tr></thead>
+  <tbody>
+  <tr><td><code>damage_value_&lt;id&gt;</code></td>
+      <td>The valuation. One row per district × damage class, plus facility
+          counts, housing damage grades and population indicators. This is
+          what the dashboard and both CSVs are built from.</td></tr>
+  <tr><td><code>affectedbld_&lt;id&gt;</code></td>
+      <td>The whole building footprints the hazard touched. Feeds the
+          dashboard's Housing overlay only. Queued separately so the numbers
+          land first; the dashboard works without it, minus that one
+          layer.</td></tr>
+  </tbody>
+</table>
+
+<h3>What the engine computes</h3>
+
+<p>
+For every damage class, at each 10&nbsp;m pixel:
 </p>
 
 <div class="eq">
@@ -87,52 +212,259 @@ $$\text{damage}_{\text{IDR}} \;=\; \sum_{\text{pixels}}
 </div>
 
 <ul>
-  <li><b>Quantity</b> — flooded area (m² or ha) or length (km) of the exposed
-      asset in that pixel.</li>
-  <li><b>Unit cost</b> — the full reconstruction cost at 100&nbsp;% damage,
-      compiled from Indonesian government price standards (DKI SHST&nbsp;2025,
-      HSPK, PUPR) and statistics. Every value is tagged with its source.</li>
-  <li><b>DDF</b> — depth–damage functions (JRC, Huizinga et&nbsp;al.&nbsp;2017,
-      Asia set): the fraction of value lost at a given water depth. Evaluated
-      per pixel, not on a district average, because the curves are
-      non-linear.</li>
+  <li><b>Quantity</b> — exposed area (m² or ha) or length (km) in that
+      pixel.</li>
+  <li><b>Unit cost</b> — full reconstruction cost at 100&nbsp;% damage, from
+      Indonesian government price standards (DKI SHST&nbsp;2025, HSPK, PUPR)
+      and statistics. Every value is tagged with its source.</li>
+  <li><b>DDF</b> — depth–damage function (JRC, Huizinga et&nbsp;al.&nbsp;2017,
+      Asia set). Evaluated <em>per pixel</em>, not on a district average,
+      because the curves are non-linear.</li>
   <li><b>Province ratio</b> — regional construction-cost index
-      (BPS IKK&nbsp;2025, DKI Jakarta&nbsp;=&nbsp;1.00).</li>
+      (BPS IKK&nbsp;2025, DKI Jakarta&nbsp;=&nbsp;1.00). Not applied to the
+      handful of classes whose unit cost is already a national average.</li>
 </ul>
 
 <p>
-Landslides and earthquakes have no meaningful "depth", so the engine assigns a
-constant saturating depth inside the detected extent — every curve reaches
-100&nbsp;% loss, i.e. anything inside the footprint is treated as destroyed.
+The same run produces the Sendai Framework indicators: affected facility
+counts (Target&nbsp;D), the damaged / destroyed housing split (C-4), and
+population (B-1, B-3, B-4). Every number can be traced to its inputs on the
+<a href="datacheck.html">Data Check</a> page.
 </p>
+
+<div class="note">
+<strong>If a province-wide export fails</strong>, the first switch to try is
+<code>housingCount: false</code> in the Stage-2 call. It drops only the
+estimated house <em>counts</em> and keeps every rupiah figure, facility count,
+population indicator and housing floor area.
+</div>
+
+<h2>5 · Stage 3 — read, export, publish</h2>
 
 <p>
-Beyond monetary damage the same run also produces the Sendai Framework (SFDRR)
-indicators: affected facility counts (Target&nbsp;D), damaged / destroyed
-housing split (C-4), and exposed / affected population from WorldPop
-(B-1, B-3, B-4).
+Open <code>03_dashboard/01_dashboard.js</code>. It never computes a valuation;
+it reads the stored table, which is why it opens in seconds however large the
+event was.
 </p>
 
-<h2>Data sources</h2>
+<h3>5.1 Reading the dashboard</h3>
+
+<ul>
+  <li><b>Event selector.</b> Only events that still have <em>both</em> their
+      valuation table and their hazard extent are listed. If a valuation is
+      hidden, the Console says which and why — usually its Stage-1 mask was
+      deleted.</li>
+  <li><b>KPI row</b> — total damage, districts affected, people, houses, area,
+      hardest-hit district.</li>
+  <li><b>Charts</b> — damage by sector, top damage classes, top districts.</li>
+  <li><b>Map</b> — hazard extent, per-district damage choropleth, flood depth
+      (floods only), exposure overlays, and the × road-closure markers where a
+      <code>roadblock_</code> Asset exists.</li>
+  <li><b>Click any district</b> to re-scope the class-totals table to it.
+      "← All cities" returns to the event-wide view.</li>
+</ul>
+
+<h3>5.2 The two CSVs</h3>
 
 <table>
-  <thead><tr><th>Layer</th><th>Dataset</th></tr></thead>
+  <thead><tr><th>Button</th><th>Format</th></tr></thead>
   <tbody>
-  <tr><td>Flood detection</td><td>Sentinel-1 GRD (SAR, 10&nbsp;m)</td></tr>
-  <tr><td>Landslide / earthquake (optical)</td><td>Sentinel-2 SR + Cloud Score+</td></tr>
-  <tr><td>Terrain (water depth)</td><td>FABDEM 30&nbsp;m bare-earth DEM</td></tr>
-  <tr><td>Buildings</td><td>VIDA combined footprints (Google Open Buildings + Microsoft)</td></tr>
-  <tr><td>Population</td><td>WorldPop 100&nbsp;m (2020)</td></tr>
-  <tr><td>Land use</td><td>In-house Random-Forest LULC 2025 (30&nbsp;m, 7 classes, field-verified training points)</td></tr>
-  <tr><td>Facilities / roads</td><td>37 curated exposure layers (OSM, ministry data, point buffers)</td></tr>
-  <tr><td>Admin boundaries</td><td>BPS 2020 (adm1/adm2/adm3)</td></tr>
+  <tr><td>Export DIBI CSV</td>
+      <td>The per-year <em>Data Bencana</em> schema — 98 Indonesian-named
+          columns in the published order, one row per district. Columns the
+          tool measures start at numeric 0; everything satellite cannot
+          observe (casualties, chronology, demographic breakdowns) is left
+          <em>blank</em>, the same convention the published file uses. Money
+          is summed into <code>kerugian_juta</code> (millions of rupiah).
+          Tool-specific additions are appended after the official 98 with an
+          <code>x_</code> prefix.</td></tr>
+  <tr><td>Export Jitupasna CSV</td>
+      <td>Long format: one row per district × damage class, with quantity,
+          unit cost, effective damage ratio and rupiah. This is the file to
+          use when you need to see <em>how</em> a number was reached.</td></tr>
   </tbody>
 </table>
 
 <p>
-All unit costs, curves and thresholds can be inspected on the
-<a href="datacheck.html">Data Check</a> page.
+Both appear as a green download link in the header when ready. They are direct
+downloads, not Tasks, so they also work from the published app.
 </p>
+
+<h3>5.3 GIS download — the exposed features</h3>
+
+<p>
+The right column has <b>Export exposed features (GIS)</b>. One press queues a
+Drive-export task for every exposure layer, each filtered to the features that
+actually intersect the loaded event's hazard extent.
+</p>
+
+<ol>
+  <li>Load an event.</li>
+  <li>Choose a format — GeoJSON (default), SHP, CSV or KML. GeoJSON is the
+      safe default: shapefiles are capped at 2&nbsp;GB and 255 columns, which
+      the housing layer can exceed.</li>
+  <li>Press <b>Queue Drive exports (all layers)</b>.</li>
+  <li>Open the Tasks tab and RUN them. Files arrive in Google Drive under
+      <code>DDA_&lt;event id&gt;</code>.</li>
+</ol>
+
+<p>
+Exported polygons are the <em>whole</em> footprints of the affected features,
+never clipped to the hazard extent — a half-flooded hospital is exported as a
+whole hospital, with an <code>exposed</code> column marking it. The housing
+layer is read from <code>affectedbld_&lt;id&gt;</code> when Stage 2 has
+produced it. Batch exports have no size limit, but this is Code&nbsp;Editor
+only.
+</p>
+
+<h3>5.4 Publishing the Assets — the sharing button</h3>
+
+<div class="note">
+<strong>Why this step exists.</strong> A published Earth Engine App reads
+Assets as <em>whoever opens it</em>, not as whoever published it. Until the
+Assets are public, the app works only for you. And it cannot be folded into
+the export: <code>Export.*.toAsset</code> has no sharing parameter, and could
+not use one, because the Asset does not exist until the task finishes.
+Publishing is always a second pass.
+</div>
+
+<p>
+The right column has <b>Share BNPB Assets</b> (visible only to the owner of
+the Assets — the app hides it from visitors, who could not use it anyway).
+</p>
+
+<ol>
+  <li><b>Press once.</b> It walks the whole BNPB tree and reports how many
+      Assets are still private, listing them in the Console. Nothing has
+      changed yet.</li>
+  <li><b>Read the list.</b></li>
+  <li><b>Press again</b> to publish them. Each write is read back from the
+      server before it is counted, so the reported figure is what is actually
+      true of the Assets, not what the call attempted.</li>
+</ol>
+
+<p>
+Run it after every round of exports. Already-public Assets are never
+rewritten, and the owner plus any individual reader you granted are carried
+through untouched. Folders are published too — a private folder cannot be
+listed by anyone else, so publishing its contents while leaving the directory
+shut would be half a job.
+</p>
+
+<div class="note">
+<strong>Licences travel with the data.</strong> The OSM-derived exposure layers
+(worship, markets, offices, shops, hotels, fuel, factories, clinics) are ODbL:
+publishing them obliges you to attribute OpenStreetMap and keep derivatives
+open. The flood-depth rasters derive from FABDEM, CC&nbsp;BY-NC-SA&nbsp;4.0 —
+attribution, share-alike, and <em>non-commercial</em>. Publishing is compatible
+with that licence; commercial use is not. Say so wherever you link the data.
+</div>
+
+<h2>6 · Data Check — verifying the inputs</h2>
+
+<p>
+<code>01_shared/07_datacheck.js</code> renders every input the valuation
+depends on, before you trust a number built on it. It does no server-side
+computation, so it opens instantly.
+</p>
+
+<ul>
+  <li><b>Unit Costs</b> — every value with its source reference.</li>
+  <li><b>DDF Curves</b> — each curve plotted, plus a depth-vs-ratio table.</li>
+  <li><b>Province Ratio</b> — the BPS IKK 2025 multipliers.</li>
+  <li><b>Crops &amp; Fish</b> — per-m² production values.</li>
+  <li><b>Exposure</b> — every layer with its producing ministry, feature count
+      and the DIBI column it feeds. At the bottom, <b>Verify every Asset</b>
+      probes all 38 exposure layers plus the boundaries and land cover, and
+      reports each as present or <em>NOT FOUND</em>. Run this after any Asset
+      is added, renamed or moved — a missing source Asset does not degrade
+      quietly, it stops the whole valuation.</li>
+  <li><b>Sanity Test</b> — a worked example: one house at 1.5&nbsp;m of water,
+      priced by hand, then repeated across provinces.</li>
+  <li><b>Engine Test</b> — checks the per-pixel damage curve against the
+      reference implementation on every curve, and guards the population
+      arithmetic against the resolution trap that would inflate it
+      100-fold.</li>
+</ul>
+
+<h2>7 · Where the Assets live</h2>
+
+<pre><code>BNPB/
+├── admin/      administrative boundaries (BPS 2020, adm1/2/3)
+├── events/     per-event outputs — ALL hazards
+├── exposure/   the 38-layer exposure catalog
+├── logo/       BNPB and JICA marks for the dashboard header
+└── lulc/       in-house Random-Forest land cover (2025, 30 m)</code></pre>
+
+<p>
+<code>events/</code> was called <code>flood/</code> until floods stopped being
+the only hazard. Retired data (the superseded DEMNAS 8&nbsp;m mosaics) and
+debug leftovers live <em>outside</em> BNPB, because dead weight inside the live
+tree reads as live.
+</p>
+
+<p>
+Naming is positional and every stage relies on it:
+<code>&lt;prefix&gt;_&lt;event id&gt;</code>, where the prefix is one of
+<code>floodmask_</code>, <code>flooddepth_</code>,
+<code>landslidemask_</code>, <code>quakemask_</code>,
+<code>roadblock_</code>, <code>damage_value_</code>,
+<code>affectedbld_</code>. The event id itself starts with
+<code>flood_</code>, <code>landslide_</code> or <code>quake_</code>, and that
+prefix is what tells the engine which hazard it is looking at.
+</p>
+
+<h2>8 · The routine, start to finish</h2>
+
+<ol>
+  <li>Stage 1 — set the event id, area and dates; Preview; Export; <b>RUN the
+      tasks</b>.</li>
+  <li>Wait for them to finish.</li>
+  <li>Stage 2 — Refresh, choose the event, Value everything; <b>RUN both
+      tasks</b>.</li>
+  <li>Wait. A province takes hours.</li>
+  <li>Dashboard — Refresh, choose the event, check the figures look
+      plausible.</li>
+  <li>Dashboard — <b>Share BNPB Assets</b>, twice, so the new Assets are
+      readable by the app.</li>
+  <li>Dashboard — Export DIBI CSV and Jitupasna CSV.</li>
+  <li>Dashboard — Queue the GIS exports if you need the shapefiles; RUN
+      them.</li>
+  <li>Data Check — <b>Verify every Asset</b> if anything was added or
+      moved.</li>
+</ol>
+
+<h2>9 · When something goes wrong</h2>
+
+<table>
+  <thead><tr><th>What you see</th><th>What it means</th></tr></thead>
+  <tbody>
+  <tr><td><code>Collection asset not found</code></td>
+      <td>A source Asset the catalog names has not been ingested, or was
+          renamed. Run <b>Verify every Asset</b> on the Data Check page — it
+          names the missing one.</td></tr>
+  <tr><td>The event is missing from a dropdown</td>
+      <td>Its Stage-1 export has not finished, or you never pressed RUN. In
+          the dashboard it can also mean the hazard extent was deleted — the
+          Console lists any event hidden for that reason.</td></tr>
+  <tr><td><code>Computation timed out</code> on screen</td>
+      <td>Something interactive is trying to do batch-sized work. Narrow the
+          area, or let the batch export do it.</td></tr>
+  <tr><td>A province-wide export dies</td>
+      <td>Try <code>housingCount: false</code> — it keeps every monetary
+          figure and drops only the estimated house counts.</td></tr>
+  <tr><td>The app works for you but not for others</td>
+      <td>The Assets are still private. Press <b>Share BNPB Assets</b>. Note
+          that newly created folders are private even when their contents are
+          public.</td></tr>
+  <tr><td><code>Export is undefined</code></td>
+      <td>You are in the published app. Asset and Drive exports must be
+          started from the Code Editor.</td></tr>
+  <tr><td>The sharing checkbox looks wrong in the Assets tab</td>
+      <td>That tab caches sharing state. Reload the Code Editor; the figure
+          the button reports was read back from the server.</td></tr>
+  </tbody>
+</table>
 
 </main>
 
