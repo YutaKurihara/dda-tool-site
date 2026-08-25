@@ -28,56 +28,45 @@
 <main class="page" style="max-width:56rem">
 
 <div class="title-block">
-<h1>Forest fire — a live national monitor</h1>
+<h1>Forest fire — VIIRS active-fire detection</h1>
 <p class="lead">
-The screen above (<code>03_dashboard/02_forestfire.js</code>) answers one
-question continuously: <em>where is it burning in Indonesia, and how much
-forest is going</em>. It reads VIIRS active-fire detections for all 514
-Kabupaten/Kota, every day, and separates the share that falls on forest.
+Thermal detection of burning, read from the satellite feed for all 514
+Kabupaten/Kota every day and split by forest cover
+(<code>03_dashboard/02_forestfire.js</code>). Unlike the other three hazards
+there is no Stage-1 detector and no stored result: a fire season is a stream
+that updates daily, not an event with a footprint.
 </p>
 </div>
 
-<div class="note">
-<strong>This one is not an event pipeline.</strong> Floods, landslides and
-earthquakes are events: something happens, Stage 1 maps its extent, Stage 2
-prices it, and the result is a stored table. A fire season is not an event.
-It is a stream that updates daily for months, and there is no moment at
-which you would freeze it and call it the answer. So this screen has no
-Stage-1 detector and no Stage-2 valuation behind it — it reads the satellite
-feed directly and computes nothing that persists.
-</div>
-
-<h2>1 · What it detects</h2>
+<h2>1&nbsp;· Detection logic</h2>
 
 <p>
-<b>VIIRS active fire, 375 m</b> — the near-real-time product from both
-platforms, merged: <code>NASA/LANCE/SNPP_VIIRS/C2</code> and
-<code>NASA/LANCE/NOAA20_VIIRS/C2</code>. Each image is a daily raster; a
-pixel with <code>Bright_ti4 &gt; 0</code> is a detection. Two satellites
-rather than one roughly doubles the overpasses, which matters on an island
-where the fire and the cloud are the same season.
+Optical sensors see smoke; thermal sensors see the fire beneath it. That is
+decisive in Indonesia, where the fire season <em>is</em> the cloud season.
 </p>
 
+<ol>
+  <li><b>Image selection</b> — VIIRS near-real-time active fire at 375&nbsp;m,
+      from both platforms merged:
+      <code>NASA/LANCE/SNPP_VIIRS/C2</code> and
+      <code>NASA/LANCE/NOAA20_VIIRS/C2</code>, filtered to Indonesia. Two
+      satellites roughly double the overpasses per day.</li>
+  <li><b>Detection</b> — each image is a daily raster; a pixel with
+      <code>Bright_ti4&nbsp;&gt;&nbsp;0</code> registered a thermal anomaly
+      bright enough to be flagged as fire.</li>
+  <li><b>Accumulation</b> — over the selected period, every pixel that fired
+      at least once is kept. A pixel burning for five days running is one
+      burned pixel, not five.</li>
+  <li><b>Forest test</b> — a burned pixel counts as forest when the in-house
+      Random-Forest land-cover map (2025, 30&nbsp;m) says forest at that
+      pixel's centre.</li>
+</ol>
+
+<h2>2&nbsp;· From detections to burned area</h2>
+
 <p>
-Thermal detection is the deliberate choice here. It sees <em>through
-smoke</em>, and it reports every day.
-</p>
-
-<div class="note">
-<strong>Why not dNBR burn severity?</strong> Sentinel-2 burn severity needs a
-clear pre-fire and post-fire pair. Kalimantan's fire season <em>is</em> its
-cloud season: over a month-long window the optical composite is mostly holes,
-and the "low severity" class fills up with ordinary vegetation change rather
-than fire. A severity map that is confidently wrong over half the country is
-worse than no severity map, so this screen does not produce one.
-</div>
-
-<h2>2 · How burned area is counted</h2>
-
-<p>
-One VIIRS detection pixel is 375 m × 375 m = 0.140625 km². Burned area is the
-number of <em>distinct</em> pixels that fired at least once during the
-selected period, times that constant:
+One VIIRS pixel is 375&nbsp;m × 375&nbsp;m = 0.140625&nbsp;km². Burned area is
+the count of distinct detected pixels times that constant:
 </p>
 
 <div class="eq">
@@ -86,140 +75,72 @@ $$\text{burned area}\;[\mathrm{km^2}] \;=\; N_{\text{distinct pixels}}
 </div>
 
 <p>
-Counting distinct pixels, not detections, is what makes the number an area
-rather than a tally of overpasses: a pixel that burns for five days in a row
-is one burned pixel, not five.
+Each city gets two figures — total burned area and the part of it that was
+forest — plus the share of its own forest that has gone. The forest
+denominator is sampled rather than summed: one 30&nbsp;m sample per
+1&nbsp;km cell, which is unbiased for an area total at a fraction of the cost
+of reading every pixel of the country.
 </p>
 
-<div class="note">
-<strong>What this figure is, and is not.</strong> It is the standard
-hotspot-footprint proxy, and this tool never calls it a burn perimeter.
-It <b>over-states</b> a small fire — a single smouldering hectare still
-lights a whole 375 m pixel — and it <b>under-states</b> a large one where a
-burn scar sat under cloud at every overpass and was never detected. It is a
-consistent, daily, national indicator of where fire is concentrated. It is
-not a mapped burn area, and it should not be quoted as one.
-</div>
-
-<h2>3 · The forest split</h2>
-
-<p>
-A burned pixel counts as forest when the in-house Random-Forest land-cover
-map (2025, 30 m) says forest at that pixel's centre. That gives each city
-two figures — total burned area, and the part of it that was forest — plus
-the share of the city's own forest that has gone.
-</p>
-
-<p>
-Total forest area per Kabupaten is <b>sampled, not summed</b>: one 30 m
-sample per 1 km cell. A systematic sample is unbiased for an area total and
-costs a fraction of reading every 30 m pixel of the country. The trade is
-visible noise in small Kabupaten, and the table on the screen says so where
-it matters.
-</p>
-
-<h2>4 · The period control</h2>
-
-<p>
-One control at the top of the left column governs everything below it: a
-picker holding the live 30-day window plus one entry per year, and a slider
-whose twelve stops are January to December.
-</p>
-
-<p>
-The map layer, the KPI row, the province ranking, the table and the daily
-chart all follow it together. A screen where the map shows July while the
-numbers beside it show "the last 30 days" is a screen that gets misread, so
-that state cannot be reached. Only changing the <em>year</em> costs a server
-call; moving the slider re-reads numbers already in the browser.
-</p>
+<h2>3&nbsp;· Key parameters</h2>
 
 <table>
-  <thead><tr><th>Panel</th><th>What it shows</th></tr></thead>
+  <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
   <tbody>
-  <tr><td>Map</td><td>VIIRS hotspots coloured by when in the period each
-      pixel first burned, over city boundaries; forest as an optional
-      overlay</td></tr>
-  <tr><td>KPI row</td><td>Burned area · of which forest · hotspot pixel
-      count · worst-hit city</td></tr>
-  <tr><td>Daily</td><td>Burned area per day within the selected
-      period</td></tr>
-  <tr><td>Monthly</td><td>Burned area per month across the selected
-      year</td></tr>
-  <tr><td>Yearly</td><td>Burned area per year across the last six</td></tr>
-  <tr><td>By province</td><td>34 provinces ranked — where the season
-      is</td></tr>
-  <tr><td>Detail</td><td>Per-city figures; a click on the map re-scopes
-      every chart to that Kabupaten/Kota</td></tr>
+  <tr><td>Sensor</td><td>VIIRS 375&nbsp;m NRT, SNPP + NOAA-20</td></tr>
+  <tr><td>Detection test</td><td><code>Bright_ti4 &gt; 0</code></td></tr>
+  <tr><td>Pixel footprint</td><td>0.140625&nbsp;km²</td></tr>
+  <tr><td>Live window</td><td>30 days, or any month of the last six years</td></tr>
+  <tr><td>Forest source</td><td>In-house RF LULC 2025, 30&nbsp;m</td></tr>
+  <tr><td>Forest-area sampling</td><td>One 30&nbsp;m sample per 1&nbsp;km cell</td></tr>
+  <tr><td>Reporting unit</td><td>514 Kabupaten/Kota; ranked by province</td></tr>
   </tbody>
 </table>
 
-<p>
-The province table ranks 34 rows rather than 514: at national scope, a
-ranking of every city buries the answer it is supposed to surface. Every
-Kabupaten/Kota is still in the CSV export.
-</p>
-
-<h2>5 · Reading the hotspot colours</h2>
-
-<p>
-The ramp runs <b>violet → red → orange → yellow</b>, newest first. In the
-live window the four classes are: under 1 day, 1–3 days, 3–7 days, and 7 days
-or older. Within a past month, the same four colours split that month into
-quarters, so the map reads identically and only the legend's wording changes.
-</p>
+<h2>4&nbsp;· Limits to keep in mind</h2>
 
 <div class="note">
-<strong>Why violet for "burning now".</strong> Red is the obvious choice and
-the wrong one: dark red-brown burn scars and bare peat are exactly what
-surrounds a fresh detection, so red hotspots disappear into their own
-background. Violet is the one hue that does not occur in an optical scene of
-Indonesia — not in forest, burn scar, cloud, smoke or water — so the pixels
-burning right now cannot be mistaken for anything else. The oldest class ends
-at yellow rather than grey, because grey reads as "no data" over satellite
-imagery, and a week-old detection is data.
+<strong>This is a hotspot footprint, not a burn perimeter.</strong> It
+<em>over-states</em> a small fire — one smouldering hectare lights a whole
+375&nbsp;m pixel — and <em>under-states</em> a large one whose scar sat under
+cloud at every overpass and was never detected. It is a consistent daily
+indicator of where fire is concentrated, and should not be quoted as mapped
+burned area.
 </div>
 
-<h2>6 · Honesty about the feed</h2>
+<ul>
+  <li><b>No burn severity.</b> Sentinel-2 dNBR needs a clear pre/post pair;
+      over a month-long window in Kalimantan the composite is mostly holes and
+      the "low severity" class fills with ordinary vegetation change.</li>
+  <li><b>Small Kabupaten carry sampling noise</b> in the forest-share column,
+      as a consequence of the 1&nbsp;km sampling above.</li>
+  <li><b>The feed runs behind.</b> Daily charts stop at the last day LANCE has
+      published, not at today — a trailing zero would read as "the fires
+      stopped" rather than "nobody has looked yet".</li>
+</ul>
+
+<h2>5&nbsp;· Display and outputs</h2>
 
 <p>
-The daily chart stops at the last day LANCE has <em>published</em>, not at
-today. The near-real-time feed runs a day or more behind, and a trailing
-point at hard zero reads as "the fires stopped" when it actually means
-"nobody has looked yet". Truncating is the honest rendering.
+Hotspots are coloured by recency, newest first: <b>violet → red → orange →
+yellow</b>. In the live window the classes are under&nbsp;1 day, 1–3, 3–7 and
+7&nbsp;days or older; within a past month the same four colours split it into
+quarters. Violet leads because it is the one hue absent from an optical scene
+of Indonesia — red would lose fresh detections against the red-brown burn scar
+and bare peat that surround them.
 </p>
 
 <p>
-The screen also survives an empty feed. A LANCE outage, or a month older than
-the rolling archive, returns no images at all; every reduction is written to
-produce an empty result rather than an error, so the screen reports nothing
-found instead of breaking.
-</p>
-
-<h2>7 · What it costs to run</h2>
-
-<p>
-Three server reductions, and that is the entire budget: the fire time series
-(day, month and forest split per city, for the selected year), total forest
-area per city, and burned area per year across six years — kept separate
-precisely so that moving the year picker does not re-read all six. Everything
-after that — rendering, clicking, switching period, building the CSV — is
-client-side, the same rule the flood dashboard follows.
-</p>
-
-<p>
-The time series come back as histogram dictionaries rather than one band per
-step. A whole year of per-day, per-month, forest-split burned area is twelve
-bands, because each month's band encodes day-of-month and the forest flag
-together and one histogram decodes all of it. Spelled naively that is
-12 × 31 × 2 bands.
+One period control drives the map, the KPI row, the province ranking and all
+three charts together — daily within the period, monthly across the year,
+yearly across the last six. Clicking a Kabupaten/Kota re-scopes every chart to
+it. The table ranks 34 provinces rather than 514 cities; every city is in the
+CSV export.
 </p>
 
 <p class="muted">
-Deliberately absent: damage value, affected population, building counts, burn
-severity and deforestation history. Each is a further national pass for a
-number this screen does not need in order to answer where it is burning and
-how much forest is going.
+Sources: NASA LANCE VIIRS active fire (SNPP, NOAA-20), Collection 2 NRT ·
+in-house Random-Forest land cover 2025 · BPS 2020 administrative boundaries.
 </p>
 
 </main>
