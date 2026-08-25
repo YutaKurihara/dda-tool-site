@@ -105,12 +105,18 @@ a batch export rather than a dashboard.
 <h2>4&nbsp;· Limits to keep in mind</h2>
 
 <div class="note">
-<strong>This is a hotspot footprint, not a burn perimeter.</strong> It
-<em>over-states</em> a small fire — one smouldering hectare lights a whole
-375&nbsp;m pixel — and <em>under-states</em> a large one whose scar sat under
-cloud at every overpass and was never detected. It is a consistent daily
-indicator of where fire is concentrated, and should not be quoted as mapped
-burned area.
+<strong>Why this is not a burn perimeter.</strong> A perimeter is an outline
+of ground that burned, traced from before-and-after imagery. VIIRS reports
+something different: at each overpass, which 375&nbsp;m cells contained fire
+hot enough to detect. The figure above is the combined footprint of those
+cells — <em>where fire was seen</em>, not what ground burned.
+<br><br>
+That difference cuts both ways. One burning hectare flags its entire
+375&nbsp;m cell, all 14&nbsp;ha of it, so small fires are over-stated. And a
+fire that burned between two overpasses, or sat under cloud every time the
+satellite looked, is never detected at all — its scar is simply missing. Read
+the number as where and when fire is concentrated, not as an area of burned
+land.
 </div>
 
 <ul>
@@ -151,13 +157,6 @@ measure, so its elapsed days are divided into four equal parts instead and
 each pixel takes the colour of the part it first burned in — the month's last
 quarter violet, its first quarter yellow. The map therefore reads the same
 either way, and only the legend's wording changes.
-</p>
-
-<p>
-Violet leads because it is the one hue absent from an optical scene of
-Indonesia. Red is the obvious choice and the wrong one: red-brown burn scar
-and bare peat are exactly what surrounds a fresh detection, so red hotspots
-disappear into their own background.
 </p>
 
 <p>
