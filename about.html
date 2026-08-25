@@ -16,6 +16,7 @@
   <a class="navlink" href="flood.html">Flood</a>
   <a class="navlink" href="landslide.html">Landslide</a>
   <a class="navlink" href="earthquake.html">Earthquake</a>
+  <a class="navlink" href="forestfire.html">Forest Fire</a>
   <a class="navlink" href="datacheck.html">Data Check</a>
   <a class="navlink active" href="about.html">Manual</a>
 </nav>
@@ -44,6 +45,13 @@ exposure layers, and prices the damage in rupiah following the Jitupasna
 guideline (Perka BNPB No.&nbsp;15/2011) and the reporting items of the DIBI
 database. Everything runs on Earth Engine; no local GIS software is needed to
 produce an estimate.
+</p>
+
+<p>
+Alongside that three-stage pipeline sits one screen that does not belong to
+it: the <a href="forestfire.html">forest-fire monitor</a>. A fire season is a
+daily stream rather than an event with a footprint, so it is read live from
+the satellite feed, and nothing about it is stored or valued.
 </p>
 
 <h2>1 · Before you start</h2>
@@ -82,11 +90,11 @@ dashboard last because it only reads what they produced.
 </p>
 
 <p>
-<b>You only ever open four of these</b> — the three detectors and the
-dashboard, plus Data Check when you want to inspect the inputs. Everything in
-<code>01_shared/01–06</code> is library code that the others
-<code>require()</code>; you edit it when a cost or a threshold changes, never
-to run an assessment.
+<b>You only ever open five of these</b> — the three detectors, the
+dashboard and the fire monitor, plus Data Check when you want to inspect the
+inputs. Everything in <code>01_shared/01–06</code> is library code that the
+others <code>require()</code>; you edit it when a cost or a threshold changes,
+never to run an assessment.
 </p>
 
 <table>
@@ -128,6 +136,11 @@ to run an assessment.
   <tr><td><code>03_dashboard/01_dashboard.js</code></td>
       <td><b>Screen</b> — Stage 3: viewer, CSV exports, GIS exports and Asset
           sharing. This is the one published as an App.</td></tr>
+  <tr><td><code>03_dashboard/02_forestfire.js</code></td>
+      <td><b>Screen</b> — the national
+          <a href="forestfire.html">forest-fire monitor</a>. Standalone: it
+          reads the VIIRS feed directly and has no Stage 1 or Stage 2 behind
+          it, because a fire season is a stream, not an event.</td></tr>
   </tbody>
 </table>
 

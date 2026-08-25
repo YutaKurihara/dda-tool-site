@@ -16,6 +16,7 @@
 window.DDA_APPS = {
   dashboard: "https://ee-kurihara-yt.projects.earthengine.app/view/dashboard",
   datacheck: "https://ee-kurihara-yt.projects.earthengine.app/view/datacheck",
+  forestfire: "https://ee-kurihara-yt.projects.earthengine.app/view/forestfire",
 };
 
 /* Injects the iframe (or a placeholder card) into #app-slot. */
