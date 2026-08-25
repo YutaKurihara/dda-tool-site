@@ -68,14 +68,23 @@ decisive in Indonesia, where the fire season <em>is</em> the cloud season.
 <h2>2&nbsp;· From detections to burned area</h2>
 
 <p>
-One VIIRS pixel is 375&nbsp;m × 375&nbsp;m = 0.140625&nbsp;km². Burned area is
-the count of distinct detected pixels times that constant:
+Burned area is the summed area of the distinct cells that fired — and each
+cell's area is <em>measured</em>, not assumed:
 </p>
 
 <div class="eq">
-$$\text{burned area}\;[\mathrm{km^2}] \;=\; N_{\text{distinct pixels}}
-\;\times\; 0.140625$$
+$$\text{burned area}\;[\mathrm{km^2}] \;=\;
+\sum_{\text{distinct cells}} \text{pixelArea}$$
 </div>
+
+<p>
+A cell is nominally 375&nbsp;m × 375&nbsp;m = 0.140625&nbsp;km², and
+multiplying a count by that constant is the obvious shortcut. It is also a
+guess about a grid nobody checked: these products are swath rasters — rotated,
+and not necessarily 375&nbsp;m in whatever projection the reduction ends up
+running in. So the tool sums <code>ee.Image.pixelArea</code> per Kabupaten
+instead, and keeps the constant only as a fallback.
+</p>
 
 <p>
 Each city gets two figures — total burned area and the part of it that was
@@ -94,7 +103,8 @@ a batch export rather than a dashboard.
   <tr><td>Sensor</td><td>VIIRS 375&nbsp;m NRT, SNPP + NOAA-20</td></tr>
   <tr><td>Detection test</td><td><code>Bright_ti4 &gt; 0</code>, confidence
       nominal or high</td></tr>
-  <tr><td>Pixel footprint</td><td>0.140625&nbsp;km²</td></tr>
+  <tr><td>Cell area</td><td>Measured per cell
+      (<code>ee.Image.pixelArea</code>); 0.140625&nbsp;km² nominal</td></tr>
   <tr><td>Live window</td><td>30 days, or any month of the last six years</td></tr>
   <tr><td>Forest source</td><td>In-house RF LULC 2025, 30&nbsp;m</td></tr>
   <tr><td>Forest-area sampling</td><td>One 30&nbsp;m sample per 250&nbsp;m cell</td></tr>
@@ -103,70 +113,21 @@ a batch export rather than a dashboard.
 </table>
 
 <h2>4&nbsp;· Limits to keep in mind</h2>
-
-<div class="note">
-<strong>Why this is not a burn perimeter.</strong> A perimeter is an outline
-of ground that burned, traced from before-and-after imagery. VIIRS reports
-something different: at each overpass, which 375&nbsp;m cells contained fire
-hot enough to detect. The figure above is the combined footprint of those
-cells — <em>where fire was seen</em>, not what ground burned.
-<br><br>
-That difference cuts both ways. One burning hectare flags its entire
-375&nbsp;m cell, all 14&nbsp;ha of it, so small fires are over-stated. And a
-fire that burned between two overpasses, or sat under cloud every time the
-satellite looked, is never detected at all — its scar is simply missing. Read
-the number as where and when fire is concentrated, not as an area of burned
-land.
-</div>
-
 <ul>
-  <li><b>No burn severity.</b> Sentinel-2 dNBR needs a clear before-and-after
-      pair. Over a month-long window in Kalimantan the optical composite is
-      mostly cloud holes, and the "low severity" class fills up with ordinary
-      vegetation change instead of fire — so this tool does not produce a
-      severity map at all.</li>
-  <li><b>The smallest Kabupaten have the noisiest forest figures.</b> Forest
-      area is sampled, so a city's accuracy depends on how many sample cells
-      fall inside it. A large regency contains thousands; a small kota
-      contains few, and its forest-share column should be read as
-      approximate.</li>
-  <li><b>The satellite feed runs a day or more behind.</b> NASA's
-      near-real-time service (LANCE) publishes with a lag, so the daily chart
-      stops at the last day actually published rather than at today. A
-      trailing point drawn at zero would say "the fires stopped" when it
-      means "nobody has looked yet".</li>
+  <li>This is a hotspot footprint, not a burn perimeter. One smouldering
+      hectare lights its whole 375&nbsp;m cell — all 14&nbsp;ha of it — so the
+      total typically runs several times the burned area a ministry maps from
+      Landsat.</li>
+  <li>It runs short where cloud hid a fire at every overpass. Thermal sees
+      through smoke, but not through thick cloud.</li>
+  <li>No burn severity. Sentinel-2 dNBR needs a clear before-and-after pair,
+      and over a month-long window in Kalimantan the optical composite is
+      mostly cloud holes.</li>
+  <li>Forest area is sampled rather than summed, so the forest-share column is
+      noisiest on the smallest kota.</li>
+  <li>The LANCE feed publishes a day or more behind, so the daily chart stops
+      at the last day published rather than at today.</li>
 </ul>
-
-<h2>5&nbsp;· Display and outputs</h2>
-
-<p>
-<b>The period.</b> Two controls at the top of the left column set it: a picker
-holding either the live 30-day window or one of the last six years, and a
-slider whose twelve stops are January to December. Everything below follows
-them together — the map, the KPI row, the province ranking and all three
-charts. A screen showing July on the map and "the last 30 days" in the numbers
-beside it would be misread, so that state cannot be reached.
-</p>
-
-<p>
-<b>Hotspot colours.</b> Detections are shaded by how recently each pixel
-<em>first</em> burned, newest to oldest: <b>violet → red → orange → yellow</b>.
-In the live window the four classes are under&nbsp;1&nbsp;day, 1–3&nbsp;days,
-3–7&nbsp;days and 7&nbsp;days or older. A past month has no "days ago" to
-measure, so its elapsed days are divided into four equal parts instead and
-each pixel takes the colour of the part it first burned in — the month's last
-quarter violet, its first quarter yellow. The map therefore reads the same
-either way, and only the legend's wording changes.
-</p>
-
-<p>
-<b>Charts and export.</b> Three time series — daily within the selected
-period, monthly across the year, yearly across the last six. Clicking a
-Kabupaten/Kota on the map re-scopes all of them to that city. The ranking
-table lists 34 provinces rather than 514 cities, because at national scope a
-ranking of every city buries the answer; every city is still in the CSV
-export.
-</p>
 
 <p class="muted">
 Sources: NASA LANCE VIIRS active fire (SNPP, NOAA-20), Collection 2 NRT ·
