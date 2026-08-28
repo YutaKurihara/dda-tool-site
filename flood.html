@@ -45,25 +45,41 @@ pre-event state.
 </p>
 
 <ol>
-  <li><b>Image selection</b> — Sentinel-1 GRD, IW mode, VV polarisation,
-      single orbit direction, filtered to the AOI. Two mosaics are built:
-      a <em>pre-event</em> window (dry reference) and a <em>post-event</em>
-      window (during/after the flood).</li>
-  <li><b>Speckle smoothing</b> — a focal median removes the salt-and-pepper
-      noise inherent to SAR.</li>
+  <li><b>Image selection</b> — Sentinel-1 GRD, IW mode at 10&nbsp;m, VV
+      polarisation, single orbit direction, filtered to the AOI. Two
+      composites are built: a <em>pre-event</em> window reduced to its
+      <em>median</em> (so that one windy or wet scene cannot set the dry
+      reference), and a <em>post-event</em> mosaic that keeps the peak of the
+      flood.</li>
+  <li><b>Speckle smoothing</b> — a 50&nbsp;m circular focal mean removes the
+      salt-and-pepper noise inherent to SAR.</li>
   <li><b>Change ratio</b> — the pixel is flagged as flooded when
-      \( \sigma^0_{\text{pre}} / \sigma^0_{\text{post}} > 1.25 \)
-      (backscatter dropped by ≥ 25 %).</li>
-  <li><b>Refinement</b> — isolated pixel clusters are removed with a
-      connected-pixel filter, and steep terrain (where radar shadow mimics
-      water) is masked using a slope threshold.</li>
+      \( \sigma^0_{\text{post}} / \sigma^0_{\text{pre}} > 1.25 \).
+      Both values are in decibels and negative over land, so a ratio above
+      one means the surface became <em>darker</em>. The test is UN-SPIDER's
+      as published; note that on dB values the drop it demands grows with
+      the pre-event brightness.</li>
+  <li><b>Permanent water</b> — pixels that are water in a normal year are
+      removed: JRC Global Surface Water v1.4, seasonality ≥ 10 months (the
+      UN-SPIDER rule) or occurrence ≥ 80 %. The second band fills the
+      no-data gaps the first leaves under persistent cloud. Floodplains that
+      flood a few weeks a year sit far below either bar and are kept.</li>
+  <li><b>Refinement</b> — clusters smaller than 50 pixels (0.5&nbsp;ha) are
+      removed with a connected-pixel filter, and terrain steeper than 5°
+      (where radar shadow mimics water) is masked. The result is pinned to a
+      fixed grid so that it does not change with zoom level.</li>
 </ol>
 
 <div class="note">
-<strong>Design choice:</strong> the JRC permanent-water mask is deliberately
-<em>not</em> subtracted. River channels overflowing their banks are part of the
-flood; removing "permanent water" would cut holes exactly where the flooding
-started.
+<strong>Why permanent water is removed twice — and once not at all.</strong>
+Lake surfaces are not stable in radar: wind roughens them by 10&nbsp;dB or
+more, which is larger than the darkening a real flood produces, so a calm
+post-event lake reads as "flooded" unless it is masked. The mask is applied to
+the reported extent. It is <em>not</em> applied to the extent handed to the
+depth model: FwDET reads the water level off the flood's outer edge, and
+cutting a lake out first would turn its shore into a false edge at the lake's
+own elevation, dragging the depths around it down. Depth is therefore computed
+on the unmasked extent and masked afterwards, matching the extent.
 </div>
 
 <h3>Alternative input: pre-analysed flood polygons</h3>
@@ -105,8 +121,14 @@ exactly the urban and vegetated areas that matter most.
 <table>
   <thead><tr><th>Parameter</th><th>Value</th><th>Where</th></tr></thead>
   <tbody>
-  <tr><td>Change-ratio threshold</td><td>1.25</td><td><code>01_flood_detection.js</code></td></tr>
-  <tr><td>Polarisation / mode</td><td>VV, IW, single orbit</td><td><code>01_flood_detection.js</code></td></tr>
+  <tr><td>Change-ratio threshold</td><td>post / pre &gt; 1.25 (dB values)</td><td><code>SAR.diffThreshold</code></td></tr>
+  <tr><td>Polarisation / mode</td><td>VV, IW GRD 10&nbsp;m, single orbit</td><td><code>SAR.polarization</code>, <code>SAR.pass</code></td></tr>
+  <tr><td>Pre-event composite</td><td>median of the window</td><td><code>SAR.preComposite</code></td></tr>
+  <tr><td>Speckle filter</td><td>focal mean, 50&nbsp;m circle</td><td><code>SAR.smoothingRadius</code></td></tr>
+  <tr><td>Permanent water</td><td>JRC GSW 1.4: seasonality ≥ 10 mo or occurrence ≥ 80 %</td><td><code>SAR.permanentWater*</code></td></tr>
+  <tr><td>Minimum cluster</td><td>50 px = 0.5&nbsp;ha</td><td><code>SAR.minConnectedPixels</code></td></tr>
+  <tr><td>Slope mask</td><td>&lt; 5° (HydroSHEDS)</td><td><code>SAR.maxSlope</code></td></tr>
+  <tr><td>Depth interpolation reach</td><td>5,000&nbsp;m (covers floods up to ≈ 9&nbsp;km wide)</td><td><code>maxCostDistance</code></td></tr>
   <tr><td>DEM</td><td>FABDEM 30 m (fixed, no user choice)</td><td><code>01_constants.js</code></td></tr>
   <tr><td>Output grid</td><td>10 m (mask and depth)</td><td>export settings</td></tr>
   <tr><td>Facility "affected" test</td><td>area-weighted mean depth ≥ 0.30 m</td><td><code>THRESHOLDS.facility_depth_m</code></td></tr>
