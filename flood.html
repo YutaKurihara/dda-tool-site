@@ -47,10 +47,11 @@ pre-event state.
 <ol>
   <li><b>Image selection</b> — Sentinel-1 GRD, IW mode at 10&nbsp;m, VV
       polarisation, single orbit direction, filtered to the AOI. Two
-      composites are built: a <em>pre-event</em> window reduced to its
-      <em>median</em> (so that one windy or wet scene cannot set the dry
-      reference), and a <em>post-event</em> mosaic that keeps the peak of the
-      flood.</li>
+      mosaics are built the same way: a <em>pre-event</em> window (dry
+      reference) and a <em>post-event</em> window (during or after the
+      flood). Both windows are composited identically, because the change
+      threshold below was set for a one-scene-against-one-scene comparison
+      and would drift if only one side were smoothed in time.</li>
   <li><b>Speckle smoothing</b> — a 50&nbsp;m circular focal mean removes the
       salt-and-pepper noise inherent to SAR.</li>
   <li><b>Change ratio</b> — the pixel is flagged as flooded when
@@ -123,7 +124,7 @@ exactly the urban and vegetated areas that matter most.
   <tbody>
   <tr><td>Change-ratio threshold</td><td>post / pre &gt; 1.25 (dB values)</td><td><code>SAR.diffThreshold</code></td></tr>
   <tr><td>Polarisation / mode</td><td>VV, IW GRD 10&nbsp;m, single orbit</td><td><code>SAR.polarization</code>, <code>SAR.pass</code></td></tr>
-  <tr><td>Pre-event composite</td><td>median of the window</td><td><code>SAR.preComposite</code></td></tr>
+  <tr><td>Window composite</td><td>mosaic, same for both windows</td><td><code>SAR.composite</code></td></tr>
   <tr><td>Speckle filter</td><td>focal mean, 50&nbsp;m circle</td><td><code>SAR.smoothingRadius</code></td></tr>
   <tr><td>Permanent water</td><td>JRC GSW 1.4: seasonality ≥ 10 mo or occurrence ≥ 80 %</td><td><code>SAR.permanentWater*</code></td></tr>
   <tr><td>Minimum cluster</td><td>50 px = 0.5&nbsp;ha</td><td><code>SAR.minConnectedPixels</code></td></tr>
