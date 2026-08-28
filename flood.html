@@ -76,11 +76,15 @@ pre-event state.
 Lake surfaces are not stable in radar: wind roughens them by 10&nbsp;dB or
 more, which is larger than the darkening a real flood produces, so a calm
 post-event lake reads as "flooded" unless it is masked. The mask is applied to
-the reported extent. It is <em>not</em> applied to the extent handed to the
-depth model: FwDET reads the water level off the flood's outer edge, and
-cutting a lake out first would turn its shore into a false edge at the lake's
-own elevation, dragging the depths around it down. Depth is therefore computed
-on the unmasked extent and masked afterwards, matching the extent.
+the reported extent. For the depth model the opposite is done: permanent water
+is <em>added into</em> the flooded domain. FwDET reads the water level off the
+flood's edge, and a DEM records a lake or river at its normal-stage surface, so
+any shoreline that becomes an edge pulls the surrounding depths down by the
+whole flood rise — the underestimation Cohen et al. report at Lake Houston and
+across river channels. Change detection never flags a river channel (it is dark
+before and after), so without this step the channel would be a hole in the
+domain and its banks would be edges. Depth is computed with the water bodies
+inside the domain and then masked to the reported extent.
 </div>
 
 <h3>Alternative input: pre-analysed flood polygons</h3>
@@ -129,6 +133,7 @@ exactly the urban and vegetated areas that matter most.
   <tr><td>Permanent water</td><td>JRC GSW 1.4: seasonality ≥ 10 mo or occurrence ≥ 80 %</td><td><code>SAR.permanentWater*</code></td></tr>
   <tr><td>Minimum cluster</td><td>50 px = 0.5&nbsp;ha</td><td><code>SAR.minConnectedPixels</code></td></tr>
   <tr><td>Slope mask</td><td>&lt; 5° (HydroSHEDS)</td><td><code>SAR.maxSlope</code></td></tr>
+  <tr><td>Water bodies in depth domain</td><td>added (same JRC rule), never edges</td><td><code>addWater</code></td></tr>
   <tr><td>Depth interpolation reach</td><td>5,000&nbsp;m (covers floods up to ≈ 9&nbsp;km wide)</td><td><code>maxCostDistance</code></td></tr>
   <tr><td>DEM</td><td>FABDEM 30 m (fixed, no user choice)</td><td><code>01_constants.js</code></td></tr>
   <tr><td>Output grid</td><td>10 m (mask and depth)</td><td>export settings</td></tr>
