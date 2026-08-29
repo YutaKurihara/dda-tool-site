@@ -58,6 +58,15 @@ bare-soil or water signal.
       morphological erosion: a 3 × 3 <code>focal_min</code> deletes every
       slide narrower than three pixels — 30 m at export, 90 m in the coarse
       preview — and shallow slides here are often 10–40 m wide.</li>
+  <li><b>Terrain gate, by patch</b> — a connected patch is kept only if
+      some pixel of it lies on ground steeper than 10° (HydroSHEDS 90 m).
+      This is deliberately not a pixel mask: a slide starts on the hillside
+      and comes to rest on the valley floor, the lake shore or the road,
+      and that deposit is where the damage is. Masking by slope pixel by
+      pixel would keep the scarp and delete the damage. The patch test
+      keeps the whole slide and drops a harvest, a clearing or a drained
+      pond on flat land, which have no steep pixel anywhere. Curvature is
+      not used; at 30–90 m it is noise.</li>
 </ol>
 
 <h2>From extent to damage</h2>
@@ -89,6 +98,7 @@ as for floods.
   <tr><td>Pre-event NDVI</td><td>&gt; 0.5</td><td>Must have been vegetated (excludes fields, urban)</td></tr>
   <tr><td>Bare-soil check</td><td>BSI &gt; 0.05, or MNDWI &gt; 0 with B8 &lt; 0.25</td><td>Scar looks like soil/rock or ponded debris</td></tr>
   <tr><td>Minimum cluster</td><td>5 px ≈ 500 m²</td><td>Smaller fragments are noise</td></tr>
+  <tr><td>Slope gate</td><td>patch touches ≥ 10° (HydroSHEDS)</td><td>Drops flat-land clearing; keeps the runout</td></tr>
   <tr><td>Cloud mask</td><td>Cloud Score+ (<code>linkCollection</code>)</td><td>Replaced s2cloudless join, which ran out of memory on long stacks</td></tr>
   </tbody>
 </table>
