@@ -37,14 +37,12 @@ bare-soil or water signal.
 
 <ol>
   <li><b>Image pairs</b> — cloud-free Sentinel-2 median composites are
-      built on either side of the event date, with deliberately unequal
-      windows: a long one <em>before</em> (six months by default — a stable,
-      fully vegetated reference) and a short one <em>after</em> (two months).
-      A scar in the tropics greens up within weeks, so a long post-event
-      median is dominated by scenes in which the slide has already been
-      recolonised and the change disappears. Clouds are masked per pixel
-      with Google's <b>Cloud Score+</b> dataset, which is far more robust in
-      the humid tropics than classic QA bitmasks.</li>
+      built over equal windows either side of the event date (six months
+      each by default), so that both sides are estimated the same way.
+      The after window can be shortened when a scar has visibly greened up
+      again in the after composite. Clouds are masked per pixel with
+      Google's <b>Cloud Score+</b> dataset, which is far more robust in the
+      humid tropics than classic QA bitmasks.</li>
   <li><b>Vegetation loss</b> — a pixel is a candidate when NDVI drops by more
       than 0.25 <em>and</em> the pre-event NDVI was above 0.5 (it must have
       been vegetated to begin with — this suppresses false alarms on fields
@@ -83,8 +81,7 @@ as for floods.
 <table>
   <thead><tr><th>Parameter</th><th>Value</th><th>Rationale</th></tr></thead>
   <tbody>
-  <tr><td>Before window</td><td>6 months (adjustable)</td><td>Stable vegetated reference</td></tr>
-  <tr><td>After window</td><td>2 months (adjustable)</td><td>Catch the scar before it greens up; lengthen only under persistent cloud</td></tr>
+  <tr><td>Windows</td><td>6 months each side (adjustable)</td><td>Same estimator on both sides</td></tr>
   <tr><td>NDVI drop</td><td>&gt; 0.25</td><td>Sharp vegetation loss, robust to seasonal variation</td></tr>
   <tr><td>Pre-event NDVI</td><td>&gt; 0.5</td><td>Must have been vegetated (excludes fields, urban)</td></tr>
   <tr><td>Bare-soil check</td><td>BSI &gt; 0.05, or MNDWI &gt; 0 with B8 &lt; 0.25</td><td>Scar looks like soil/rock or ponded debris</td></tr>
