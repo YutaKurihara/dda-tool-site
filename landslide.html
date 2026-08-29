@@ -36,10 +36,15 @@ bare-soil or water signal.
 <h2>Detection logic</h2>
 
 <ol>
-  <li><b>Image pairs</b> — cloud-free Sentinel-2 composites are built for a
-      window before and after the event date. Clouds are masked per pixel with
-      Google's <b>Cloud Score+</b> dataset, which is far more robust in the
-      humid tropics than classic QA bitmasks.</li>
+  <li><b>Image pairs</b> — cloud-free Sentinel-2 median composites are
+      built on either side of the event date, with deliberately unequal
+      windows: a long one <em>before</em> (six months by default — a stable,
+      fully vegetated reference) and a short one <em>after</em> (two months).
+      A scar in the tropics greens up within weeks, so a long post-event
+      median is dominated by scenes in which the slide has already been
+      recolonised and the change disappears. Clouds are masked per pixel
+      with Google's <b>Cloud Score+</b> dataset, which is far more robust in
+      the humid tropics than classic QA bitmasks.</li>
   <li><b>Vegetation loss</b> — a pixel is a candidate when NDVI drops by more
       than 0.25 <em>and</em> the pre-event NDVI was above 0.5 (it must have
       been vegetated to begin with — this suppresses false alarms on fields
@@ -48,9 +53,11 @@ bare-soil or water signal.
       post-event surface looks like a slide scar:
       bare soil (BSI &gt; 0.05) or newly wet/ponded ground
       (MNDWI &gt; 0 with low NIR reflectance).</li>
-  <li><b>Cleanup</b> — a morphological <code>focal_min</code> removes
-      single-pixel speckle and a minimum-cluster filter (≥ 5 pixels ≈
-      500 m²) removes fragments smaller than any damaging slide.</li>
+  <li><b>Cleanup</b> — a minimum-cluster filter (≥ 5 pixels ≈ 500 m²)
+      removes fragments smaller than any damaging slide. There is no
+      morphological erosion: a 3 × 3 <code>focal_min</code> deletes every
+      slide narrower than three pixels — 30 m at export, 90 m in the coarse
+      preview — and shallow slides here are often 10–40 m wide.</li>
 </ol>
 
 <h2>From extent to damage</h2>
@@ -76,6 +83,8 @@ as for floods.
 <table>
   <thead><tr><th>Parameter</th><th>Value</th><th>Rationale</th></tr></thead>
   <tbody>
+  <tr><td>Before window</td><td>6 months (adjustable)</td><td>Stable vegetated reference</td></tr>
+  <tr><td>After window</td><td>2 months (adjustable)</td><td>Catch the scar before it greens up; lengthen only under persistent cloud</td></tr>
   <tr><td>NDVI drop</td><td>&gt; 0.25</td><td>Sharp vegetation loss, robust to seasonal variation</td></tr>
   <tr><td>Pre-event NDVI</td><td>&gt; 0.5</td><td>Must have been vegetated (excludes fields, urban)</td></tr>
   <tr><td>Bare-soil check</td><td>BSI &gt; 0.05, or MNDWI &gt; 0 with B8 &lt; 0.25</td><td>Scar looks like soil/rock or ponded debris</td></tr>
