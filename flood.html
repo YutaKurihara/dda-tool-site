@@ -27,9 +27,10 @@
 <h1>Flood extent and water depth</h1>
 <p class="lead">
 Sentinel-1 radar change detection maps <em>where</em> the water is;
-the FwDET algorithm then estimates <em>how deep</em> it is. Both rasters are
-produced at 10&nbsp;m in a single export
-(<code>02_event/01_flood_detection.js</code>).
+the FwDET algorithm then estimates <em>how deep</em> it is. One script
+(<code>02_event/01_flood_detection.js</code>) queues two batch tasks: the
+observed extent at 10&nbsp;m, and the depth with its reliability flag at
+30&nbsp;m.
 </p>
 </div>
 
@@ -46,20 +47,49 @@ pre-event state.
 
 <ol>
   <li><b>Image selection</b> — Sentinel-1 GRD, IW mode at 10&nbsp;m, VV
-      polarisation, single orbit direction, filtered to the AOI. Two
-      mosaics are built the same way: a <em>pre-event</em> window (dry
-      reference) and a <em>post-event</em> window (during or after the
-      flood). Both windows are composited identically, because the change
-      threshold below was set for a one-scene-against-one-scene comparison
-      and would drift if only one side were smoothed in time.</li>
+      polarisation, filtered to the AOI. The only date the user enters is
+      the <em>flood date</em>: the pre-event window is the 60 days that end
+      six days before it (dry reference) and the post-event window the 12
+      days after it (during or after the flood); the lengths and the gap
+      can be changed under <em>Advanced settings</em>. The gap matters
+      because the rain that causes a flood arrives days before the peak, so
+      a reference scene taken the day before is already wet and the ratio
+      below would under-detect; six days is one Sentinel-1 repeat, short
+      enough that every orbit still has a look inside the window.
+      Ascending and descending passes are both
+      searched. Each Sentinel-1 relative orbit is paired with itself — its
+      own pre-event scenes against its own post-event scenes — so the two
+      sides always share the same viewing geometry, and only orbits that
+      observed the AOI in both windows take part.</li>
+  <li><b>Orbit election</b> — within each orbit the pre-event side takes,
+      per pixel, the latest scene before the gap and the post-event side the
+      earliest scene after the flood date. Both sides are composited the same
+      way because the change threshold below was set for a one-scene-against-
+      one-scene comparison. Since 2026-09-28 the orbits are ranked <em>once
+      for the whole AOI</em> — by how much of it each orbit sees in both
+      windows, ties broken by the earlier post-event scene — and the map is
+      mosaicked by that rank: the primary orbit wherever it has data, the
+      next only in its gaps. One viewing geometry and one date per region,
+      clean seams, and "which orbit and date is this map" has an answer. The
+      console prints the ranking and the primary orbit's share of the flood;
+      the map shows <em>days after flood</em> per pixel. (The earlier
+      per-pixel "closest scene wins" election remains available as
+      <code>orbitMode: 'closest'</code>.)</li>
   <li><b>Speckle smoothing</b> — a 50&nbsp;m circular focal mean removes the
       salt-and-pepper noise inherent to SAR.</li>
-  <li><b>Change ratio</b> — the pixel is flagged as flooded when
-      \( \sigma^0_{\text{post}} / \sigma^0_{\text{pre}} > 1.25 \).
-      Both values are in decibels and negative over land, so a ratio above
-      one means the surface became <em>darker</em>. The test is UN-SPIDER's
-      as published; note that on dB values the drop it demands grows with
-      the pre-event brightness.</li>
+  <li><b>Change test</b> — the pixel is flagged as flooded when the
+      backscatter <em>drops</em> by at least 3&nbsp;dB:
+      \( \sigma^0_{\text{pre}} - \sigma^0_{\text{post}} \ge 3\ \mathrm{dB} \).
+      This replaced the UN-SPIDER ratio test (post/pre &gt; 1.25 on the dB
+      values) on 2026-09-27. The ratio is arithmetic on a logarithm: the drop
+      it demands grows with pre-event brightness — 1.25&nbsp;dB on bright
+      land, 5&nbsp;dB on dark — so it fired inside the natural 1–2&nbsp;dB
+      variability of bright land and demanded the impossible of dark land.
+      Measured on Aceh Tamiang against a no-flood control date six days
+      earlier, the false-alarm floor fell from 14&nbsp;% to 2&nbsp;% of the
+      detection and hillslope contamination by 64&nbsp;%. −3&nbsp;dB is the
+      literature value and the knee of the signal-to-noise curve; it was not
+      chosen by looking at damage.</li>
   <li><b>Permanent water</b> — pixels that are water in a normal year are
       removed: JRC Global Surface Water v1.4, seasonality ≥ 10 months (the
       UN-SPIDER rule) or occurrence ≥ 80 %. The second band fills the
@@ -67,9 +97,45 @@ pre-event state.
       flood a few weeks a year sit far below either bar and are kept.</li>
   <li><b>Refinement</b> — clusters smaller than 50 pixels (0.5&nbsp;ha) are
       removed with a connected-pixel filter, and terrain steeper than 5°
-      (where radar shadow mimics water) is masked. The result is pinned to a
-      fixed grid so that it does not change with zoom level.</li>
+      (where radar shadow mimics water) is masked. The slope comes from
+      FABDEM at 30&nbsp;m since 2026-09-27: the 464&nbsp;m HydroSHEDS DEM used
+      before averages a mountainside below 5°, leaving 8&nbsp;% of the mask
+      on ground FABDEM calls steep. The result is pinned to a fixed 10&nbsp;m
+      grid so that it does not change with zoom level.</li>
 </ol>
+
+<h3>Three classes, not two: flood / dry / unknown</h3>
+
+<p>
+A binary mask asserts that everything not detected is dry, and the depth model
+below then reads the DEM along every edge of it as a shoreline. Where that
+edge is a land-cover boundary — canopy, or built-up land the C-band radar
+cannot see through — and not the water's edge, the ground does not rise there
+and the water-level reference is lost. A synthetic test with the DEM error
+cancelled exactly recovered 98&nbsp;% of a known depth from a hole-free extent
+and only 3–7&nbsp;% once the measured hole pattern was punched into it. So
+since 2026-09-27 every pixel is classified as <b>flood</b>, <b>dry</b> or
+<b>unknown</b> — the same idea as the Copernicus GFM exclusion mask — and only
+confidently dry land may act as a boundary. A pixel is unknown when any of
+these holds:
+</p>
+
+<ul>
+  <li><b>Enclosure</b> — a non-flood pixel with flood on at least half of the
+      ground within 300&nbsp;m is an internal hole of the detected lace, not a
+      shoreline, whatever its backscatter. This is the clause that recovers
+      the depth.</li>
+  <li><b>Brightness</b> — pre-event VV at or above −7&nbsp;dB is canopy or
+      built-up land; the radar cannot rule out water beneath it. Auxiliary,
+      but the only clause that reaches buildings.</li>
+  <li><b>Permanent water</b> — a channel is water, never a dry boundary.</li>
+  <li><b>Never observed</b> in both windows.</li>
+</ul>
+
+<p>
+A confident detection is never unknown. The preview shows the three classes as
+an <em>Observability</em> layer and the console prints their areas.
+</p>
 
 <div class="note">
 <strong>Why permanent water is removed twice — and once not at all.</strong>
@@ -115,7 +181,34 @@ building heights removed by machine learning
 (<a href="https://doi.org/10.1088/1748-9326/ac4d4f">Hawker et&nbsp;al.
 2022</a>). FwDET needs bare-earth ground elevation — a surface model that
 includes rooftops and tree crowns would systematically distort depths in
-exactly the urban and vegetated areas that matter most.
+exactly the urban and vegetated areas that matter most. The depth is computed
+on FABDEM's own 30&nbsp;m grid; 10&nbsp;m was oversampling it.
+</p>
+
+<p>
+Three things about how the algorithm runs here. The boundary is taken from
+<em>confidently dry</em> land only — unknown pixels are dropped from it, so
+the interpolation reaches past a canopy edge to a boundary that is plausibly
+the water's edge. The reach of that interpolation is 5&nbsp;km, raised from
+1&nbsp;km on 2026-09-28 once the unknown edges were gone and the core of a
+large flood — the most certainly flooded place on the map — was being left
+without a surface. And where the interpolated surface rests on essentially no
+dry land within its reach (under 3&nbsp;% of the neighbourhood), the depth is
+<em>masked</em> rather than invented, so that "depth unknown" and
+"0&nbsp;m" stay distinguishable downstream.
+</p>
+
+<h3>Inferred flood</h3>
+
+<p>
+An unknown pixel whose terrain sits <em>below</em> the estimated water surface
+is inferred to be flooded (decision of 2026-09-28). It is an inference from
+terrain, not a satellite observation, so it is carried separately: the depth
+Asset's <code>depth_flag</code> band records 1 for depth from a valid boundary,
+2 for inferred, 3 for no valid boundary (depth masked). The reported flood
+extent is <b>observed OR inferred</b>, and that union is made when the Assets
+are <em>read</em> (<code>C.floodExtentImage()</code>), not when they are
+written — see Outputs.
 </p>
 
 <h2>Key parameters</h2>
@@ -123,16 +216,22 @@ exactly the urban and vegetated areas that matter most.
 <table>
   <thead><tr><th>Parameter</th><th>Value</th><th>Where</th></tr></thead>
   <tbody>
-  <tr><td>Change-ratio threshold</td><td>post / pre &gt; 1.25 (dB values)</td><td><code>SAR.diffThreshold</code></td></tr>
-  <tr><td>Polarisation / mode</td><td>VV, IW GRD 10&nbsp;m, single orbit</td><td><code>SAR.polarization</code>, <code>SAR.pass</code></td></tr>
-  <tr><td>Window composite</td><td>mosaic, same for both windows</td><td><code>SAR.composite</code></td></tr>
+  <tr><td>Change test</td><td>pre − post ≥ 3.0 dB (<code>changeOperator 'db'</code>; <code>'ratio'</code> &gt; 1.25 reproduces results before 2026-09-27)</td><td><code>SAR.dbDropThreshold</code></td></tr>
+  <tr><td>Polarisation / mode</td><td>VV, IW GRD 10&nbsp;m</td><td><code>SAR.polarization</code></td></tr>
+  <tr><td>Orbit election</td><td>ascending and descending, paired per relative orbit; ranked once per AOI by coverage (ties: earlier post scene), mosaicked by rank</td><td><code>SAR.orbitMode 'single'</code>, <code>orbitRank 'coverage'</code></td></tr>
+  <tr><td>Search windows</td><td>60 days ending 6 days before the flood date / 12 days after it (adjustable)</td><td>Advanced settings</td></tr>
+  <tr><td>Pre-event gap</td><td>6 days (one S1 repeat), so the reference predates the rain</td><td>Advanced settings</td></tr>
   <tr><td>Speckle filter</td><td>focal mean, 50&nbsp;m circle</td><td><code>SAR.smoothingRadius</code></td></tr>
-  <tr><td>Permanent water</td><td>JRC GSW 1.4: seasonality ≥ 10 mo or occurrence ≥ 80 %</td><td><code>SAR.permanentWater*</code></td></tr>
+  <tr><td>Permanent water</td><td>JRC GSW 1.4: seasonality ≥ 10 mo or occurrence ≥ 80 % — removed from the extent, <em>unknown</em> for the depth boundary</td><td><code>SAR.permanentWater*</code>, <code>unknownPermanentWater</code></td></tr>
   <tr><td>Minimum cluster</td><td>50 px = 0.5&nbsp;ha</td><td><code>SAR.minConnectedPixels</code></td></tr>
-  <tr><td>Slope mask</td><td>&lt; 5° (HydroSHEDS)</td><td><code>SAR.maxSlope</code></td></tr>
-  <tr><td>Depth interpolation reach</td><td>1,000&nbsp;m export, 750&nbsp;m preview</td><td><code>maxCostDistance</code></td></tr>
-  <tr><td>DEM</td><td>FABDEM 30 m (fixed, no user choice)</td><td><code>01_constants.js</code></td></tr>
-  <tr><td>Output grid</td><td>10 m (mask and depth)</td><td>export settings</td></tr>
+  <tr><td>Slope mask</td><td>&lt; 5°, FABDEM 30 m</td><td><code>SAR.maxSlope</code>, <code>slopeSource</code></td></tr>
+  <tr><td>Unknown: enclosure</td><td>flood share ≥ 0.5 within 300 m</td><td><code>SAR.unknownEnclosure</code>, <code>…Radius</code></td></tr>
+  <tr><td>Unknown: brightness</td><td>pre-event VV ≥ −7 dB (slope &lt; 5° only)</td><td><code>SAR.unknownBrightDb</code></td></tr>
+  <tr><td>Depth interpolation reach</td><td>5,000&nbsp;m export (3,000&nbsp;m preview)</td><td><code>maxCostDistance</code></td></tr>
+  <tr><td>Depth reliability gate</td><td>≥ 3 % confidently dry land within the reach, else depth masked (flag 3)</td><td><code>minSourceFraction</code></td></tr>
+  <tr><td>Inferred flood</td><td>unknown pixels below the water surface → flag 2, part of the reported extent</td><td><code>extendUnknown</code></td></tr>
+  <tr><td>DEM</td><td>FABDEM 30 m (fixed, no user choice); outlier filter on</td><td><code>01_constants.js</code>, <code>outlierTest</code></td></tr>
+  <tr><td>Output grids</td><td>extent 10 m · depth 30 m</td><td>export settings</td></tr>
   <tr><td>Facility "affected" test</td><td>area-weighted mean depth ≥ 0.30 m</td><td><code>THRESHOLDS.facility_depth_m</code></td></tr>
   </tbody>
 </table>
@@ -141,10 +240,23 @@ exactly the urban and vegetated areas that matter most.
 <table>
   <thead><tr><th>Asset</th><th>Content</th></tr></thead>
   <tbody>
-  <tr><td><code>floodmask_&lt;event_id&gt;</code></td><td>Binary flood extent, 10 m</td></tr>
-  <tr><td><code>flooddepth_&lt;event_id&gt;</code></td><td>Water depth in metres (Float32), 10 m</td></tr>
+  <tr><td><code>floodmask_&lt;event_id&gt;</code></td><td><b>Observed</b> flood extent, binary, 10 m. Sentinel-1 only — the light task, and it lands first.</td></tr>
+  <tr><td><code>flooddepth_&lt;event_id&gt;</code></td><td>30 m, two bands: <code>depth_m</code> (metres, masked where there is no valid boundary) and <code>depth_flag</code> (1 observed with a valid boundary · 2 inferred · 3 no valid boundary).</td></tr>
   </tbody>
 </table>
+
+<div class="note">
+<strong>Why the mask no longer carries the inferred pixels (2026-10-16).</strong>
+Until then the mask Asset was written as observed&nbsp;∪&nbsp;inferred — which
+meant the mask task had to run the whole depth model, province-wide, only to
+burn <code>depth_flag&nbsp;==&nbsp;2</code> into a 10&nbsp;m raster, and the
+depth task then ran it again. Aceh's mask export was still running after
+148&nbsp;hours. The definition of the extent has not changed; the union is now
+made on read by one accessor that every consumer uses, and the mask task
+finishes in the time a Sentinel-1 change detection takes. Until the depth task
+lands the dashboard shows the observed extent and flags <em>DEPTH PENDING</em>;
+run Stage&nbsp;2 only once both Assets exist.
+</div>
 
 <h2>References</h2>
 <ul>

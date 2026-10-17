@@ -32,10 +32,25 @@
 <p class="lead">
 Thermal detection of burning, read from the satellite feed for all 514
 Kabupaten/Kota every day and split by forest cover
-(<code>03_dashboard/02_forestfire.js</code>). Unlike the other three hazards
-there is no Stage-1 detector and no stored result: a fire season is a stream
-that updates daily, not an event with a footprint.
+(<code>03_dashboard/02_forestfire.js</code>). This screen is a stream, not an
+event: it updates daily, stores nothing, and puts no money on anything.
 </p>
+</div>
+
+<div class="note">
+<strong>Two scripts, two different measurements.</strong> Fire is the one
+hazard here mapped twice, because "where is it burning today" and "what
+finally burned" are different questions with different sensors. This page
+describes both. The daily thermal monitor (§1–4) reads the VIIRS feed and
+stores nothing. Its sibling, <code>02_event/05_burnscar_detection.js</code>
+(<a href="#burnscar">§5</a>), maps the <em>perimeter</em> after the fact from a
+Sentinel-1 radar time series at 30&nbsp;m and reports burned hectares per
+Kabupaten/Kota. <b>The two will not agree, and are not meant to.</b> A single
+smouldering hectare lights a whole 375&nbsp;m thermal cell, all 14&nbsp;ha of
+it, so the monitor reads several times larger than the scar. Use the monitor
+for situational awareness during the season, and the scar for the area figure
+afterwards. Neither puts a rupiah value on a fire: burned area is the reported
+quantity.
 </div>
 
 <h2>1&nbsp;· Detection logic</h2>
@@ -120,18 +135,122 @@ a batch export rather than a dashboard.
       Landsat.</li>
   <li>It runs short where cloud hid a fire at every overpass. Thermal sees
       through smoke, but not through thick cloud.</li>
-  <li>No burn severity. Sentinel-2 dNBR needs a clear before-and-after pair,
-      and over a month-long window in Kalimantan the optical composite is
-      mostly cloud holes.</li>
+  <li>No burn perimeter or severity <em>on this screen</em> — that is the
+      burn-scar detector's job (<a href="#burnscar">§5</a>). It was rebuilt on
+      Sentinel-1 radar on 2026-10-17 precisely because the fire season is the
+      cloud and smoke season: an optical before-and-after pair over a
+      month-long window in Kalimantan is mostly cloud holes.</li>
   <li>Forest area is sampled rather than summed, so the forest-share column is
       noisiest on the smallest kota.</li>
   <li>The LANCE feed publishes a day or more behind, so the daily chart stops
       at the last day published rather than at today.</li>
 </ul>
 
+<h2 id="burnscar">5&nbsp;· Burn-scar mapping after the season — Sentinel-1 time series</h2>
+
+<p>
+<code>02_event/05_burnscar_detection.js</code> maps what actually burned, once
+the season is over or well under way. It has the same panel and export shape
+as the landslide detector but a different sensor and a different kind of
+decision: radar, because cloud and smoke do not matter to it, and a
+<em>time series</em> rather than a single before/after pair, because one wet
+date reverses the burn signal and a pair cannot tell the two apart.
+</p>
+
+<ol>
+  <li><b>One relative orbit per pixel.</b> The Sentinel-1 orbits that cover at
+      least 5&nbsp;% of the AOI are ranked by coverage and season dates (up to
+      three); each runs the whole chain and the results are mosaicked by rank
+      — the primary orbit wherever it observed, the next only in its gaps. A
+      pixel never mixes viewing geometries. The baseline is the mean of the
+      acquisitions in the <em>before</em> window: two months ahead of the
+      season start by default, dry and before any burning.</li>
+  <li><b>Per acquisition, the drop from baseline</b> —
+      \( \Delta\mathrm{VH}_d = \mathrm{VH}_d - \mathrm{VH}_{\text{baseline}} \)
+      in dB, after a 50&nbsp;m focal mean. Burned ground is darker in VH.</li>
+  <li><b>Rain confidence per date.</b> CHIRPS rain over the three days before
+      the acquisition gives each date a weight: 1 at ≤&nbsp;5&nbsp;mm, falling
+      linearly to 0.1 at ≥&nbsp;40&nbsp;mm. A date counts as <em>dry</em> at
+      weight ≥&nbsp;0.5. A second, radar-only gate catches what the rain
+      product misses: when the AOI-wide <em>median</em> drop is positive by
+      more than 0.3&nbsp;dB, wet soil has brightened everything and the date
+      is demoted whatever CHIRPS says.</li>
+  <li><b>Onset</b> — the first dry date with
+      \( \Delta\mathrm{VH} < -2 \)&nbsp;dB.</li>
+  <li><b>Burned</b> — the rain-weighted mean drop over the dates at and after
+      onset is below −1.5&nbsp;dB; patches ≥&nbsp;1&nbsp;ha; open water
+      excluded (WorldCover water objects ≥&nbsp;50&nbsp;ha, or baseline
+      VV&nbsp;&lt;&nbsp;−17&nbsp;dB — without this a wind-roughened sea fills
+      the map).</li>
+  <li><b>Status</b> — the number of dry confirmations (drop &lt; −1&nbsp;dB at
+      or after onset): <b>1 candidate</b> · <b>2 provisional</b> ·
+      <b>3+ confirmed</b>. Areas are reported by status and the
+      <em>confirmed</em> figure is the one to quote; the first observation
+      alone is wrong about half the time.</li>
+</ol>
+
+<p>
+The thresholds were fixed on Central Kalimantan 2019 and then held fixed on
+four other sites against the Gaveau et&nbsp;al. Sentinel-2 burn maps: Dice
+0.77 (Central Kalimantan 2019), 0.67 (OKI), 0.65 (Ketapang), 0.73 (Jambi), and
+0.52 in the 2023 season when only 2&nbsp;% of the land burned, at the same
+3&nbsp;% false-alarm rate. An unsupervised rule, equal to a random forest
+trained on the reference maps. Those reference maps themselves omit about a
+quarter of burns, which is why these figures are reported here but not in the
+project's frozen parameter record.
+</p>
+
+<h3>Parameters (<code>THRESHOLDS.fireS1</code>; not editable in the panel)</h3>
+<table>
+  <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+  <tbody>
+  <tr><td>Sensor / grid</td><td>Sentinel-1 IW GRD, VH (VV for the water test), 30&nbsp;m</td></tr>
+  <tr><td>Windows</td><td>baseline: 2 months before the season start · season: 4 months after (both adjustable)</td></tr>
+  <tr><td>Onset / burned / confirmation</td><td>ΔVH &lt; −2.0 dB · weighted mean &lt; −1.5 dB · &lt; −1.0 dB</td></tr>
+  <tr><td>Confirmed</td><td>≥ 3 dry confirmations (1 candidate, 2 provisional)</td></tr>
+  <tr><td>Rain weight</td><td>1 at ≤ 5 mm → 0.1 at ≥ 40 mm, 3-day CHIRPS; dry = weight ≥ 0.5</td></tr>
+  <tr><td>Radar self-gate</td><td>AOI median ΔVH &gt; +0.3 dB demotes the date</td></tr>
+  <tr><td>Patch floor</td><td>1 ha (the official 6.25 ha minimum is applied at reporting)</td></tr>
+  <tr><td>Water mask</td><td>WorldCover water objects ≥ 50 ha, or baseline VV &lt; −17 dB</td></tr>
+  <tr><td>Orbits</td><td>up to 3, coverage ≥ 5 %, mosaicked by rank</td></tr>
+  </tbody>
+</table>
+
+<h3>Outputs</h3>
+<table>
+  <thead><tr><th>Asset</th><th>Content</th></tr></thead>
+  <tbody>
+  <tr><td><code>burnmask_&lt;id&gt;</code></td><td>Binary scar, 30 m, band <code>burned</code></td></tr>
+  <tr><td><code>burnseverity_&lt;id&gt;</code></td><td>Float32, 30 m: <code>score_db</code> (weighted mean drop — more negative, stronger loss), <code>n_confirm</code>, <code>status</code> 1/2/3</td></tr>
+  <tr><td><code>burnarea_&lt;id&gt;</code></td><td>Burned ha per Kabupaten/Kota — total, confirmed, provisional, candidate — and <code>observed_pct</code>, the share of the district the radar actually observed. Also written to Drive as CSV (folder <code>DIBI_burnarea</code>).</td></tr>
+  </tbody>
+</table>
+
+<p>
+Event ids carry the <code>fire_</code> prefix. Fire is <em>area only</em>:
+there is no Stage&nbsp;2 and no dashboard entry, and the area table is the
+deliverable. Always read <code>observed_pct</code> next to the hectares — a
+district the primary orbit barely saw cannot show much burned area, whatever
+happened on the ground.
+</p>
+
+<h3>Limits</h3>
+<ul>
+  <li>Fires <em>before</em> the baseline window are invisible; an annual
+      reference map will count them as misses.</li>
+  <li>Cropland harvest produces the same VH drop and still passes (commission
+      0.5–0.9 on cropland).</li>
+  <li>A single observation has commission around 0.5; three dry observations
+      are needed, which on one orbit means roughly a month after onset.</li>
+  <li>CHIRPS publishes one to two months behind. Dates it has not covered keep
+      full weight unless the radar self-gate rejects them.</li>
+</ul>
+
 <p class="muted">
 Sources: NASA LANCE VIIRS active fire (SNPP, NOAA-20), Collection 2 NRT ·
-in-house Random-Forest land cover 2025 · BPS 2020 administrative boundaries.
+Copernicus Sentinel-1 GRD · UCSB-CHG CHIRPS · ESA WorldCover v200 ·
+in-house Random-Forest land cover 2025 · BIG (Badan Informasi Geospasial)
+administrative boundaries, 2023 edition.
 </p>
 
 </main>

@@ -105,8 +105,20 @@ as for floods.
   <thead><tr><th>Asset</th><th>Content</th></tr></thead>
   <tbody>
   <tr><td><code>landslidemask_&lt;event_id&gt;</code></td><td>Binary landslide extent, 10 m (band <code>flooded</code>, shared schema)</td></tr>
+  <tr><td><code>roadblock_&lt;event_id&gt;</code></td><td>One point per contiguous stretch where the extent crosses a national, regional or toll road, with the metres of road blocked and the road name — a <em>possible</em> closure, drawn × on the dashboard</td></tr>
   </tbody>
 </table>
+
+<p>
+Both tasks are queued at once. If the slide touches no road, the closure task
+fails with <em>"Table is empty"</em> — Earth Engine cannot write an empty
+table to an Asset — and the dashboard simply omits the × layer. That is a
+normal result, not an error. (Until 2026-10-16 the script counted the
+crossings interactively before queuing the table; province-wide that count
+exceeded the five-minute interactive limit, and the table was never queued at
+all.) For the same reason a province-wide preview draws the × markers but does
+not count them; a kabupaten preview still reports the count.
+</p>
 
 </main>
 

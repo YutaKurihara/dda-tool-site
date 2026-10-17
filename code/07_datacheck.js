@@ -1,15 +1,10 @@
 /**
- * 01_shared/07_datacheck.js — read-only inspector for the shared constants.
- * Sanity-checks the inputs feeding 06_damage_calc.js; renders instantly
- * because (except the Engine Test) every value is client-side.
- *
- * Sections (dropdown): Unit Costs (with source references) · DDF Curves ·
- * Province Ratio · Crops & Fish · Exposure (asset inventory) · Sanity Test
- * (worked example) · Engine Test (rewrite verification).
- *
- * Structure: render(sectionName) dispatches to one renderXxx() per
- * section; each only writes UI widgets to `content`. Styling shared with
- * 01_dashboard.js.
+ * 01_shared/07_datacheck.js — read-only inspector for the shared constants
+ * that feed 06_damage_calc.js: unit costs (with sources), DDF curves,
+ * province ratios, crops & fish, exposure Assets ("Verify every Asset")
+ * and engine tests. Run standalone in the Code Editor; nothing requires it.
+ * Everything renders client-side except the Asset probes and Engine Test.
+ * render(section) dispatches to one renderXxx() that fills the content panel.
  */
 
 var UC  = require('users/kurihara-yt/dibi:01_shared/02_unit_costs');
@@ -26,9 +21,15 @@ function idr(v) {
 }
 function pct(v) { return (v * 100).toFixed(0) + ' %'; }
 
+// 'INFRA.road_tol_per_km' -> UC.INFRA.road_tol_per_km
+function ucValue(key) {
+  var p = key.split('.');
+  return UC[p[0]][p[1]];
+}
+
 
 // ====================================================================
-// Palette — same validated light-mode data-viz palette as 01_dashboard.js.
+// Palette — same light-mode data-viz palette as 01_dashboard.js.
 // Categorical slots in FIXED order; sequential = one hue (blue).
 // ====================================================================
 var COL = {
@@ -48,13 +49,74 @@ var COL = {
 var CAT = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100',
            '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
 
-// Zebra striping for hand-built tables: head() resets the counter, every
-// data row calls zbg() for its background. Rendering is strictly
-// sequential, so one module-level counter is enough.
+
+// ====================================================================
+// Widget helpers
+// ====================================================================
+// Zebra striping for hand-built tables: head() / tableHead() reset the
+// counter, every data row takes zbg(). Rendering is sequential, so one
+// module-level counter is enough.
 var _z = 0;
 function zbg() { return (_z++ % 2 === 0) ? COL.surface : '#f3f2ef'; }
 
-// A KPI stat tile: caption on top, big value, small sub-line.
+// One zebra row. cells: [text, style] (fontSize defaults to 11px) or a
+// function(bg) returning a widget. ui.Label defaults to a WHITE
+// background, so every cell must carry the row's own color.
+function zrow(cells, margin) {
+  var bg = zbg();
+  var widgets = cells.map(function(c) {
+    if (typeof c === 'function') return c(bg);
+    var s = c[1] || {};
+    if (!s.fontSize) s.fontSize = '11px';
+    s.backgroundColor = bg;
+    return ui.Label(c[0], s);
+  });
+  return ui.Panel(widgets, ui.Panel.Layout.flow('horizontal'),
+                  {margin: margin || '0', padding: '1px 4px',
+                   backgroundColor: bg});
+}
+
+// Table header row. cols: [text, width, margin] (width / margin optional).
+function tableHead(cols, margin) {
+  _z = 0;
+  var widgets = cols.map(function(c) {
+    var s = {fontSize: '11px', fontWeight: 'bold', color: COL.inkSoft,
+             backgroundColor: COL.page};
+    if (c[1]) s.width = c[1];
+    if (c[2]) s.margin = c[2];
+    return ui.Label(c[0], s);
+  });
+  return ui.Panel(widgets, ui.Panel.Layout.flow('horizontal'),
+                  {margin: margin || '0', padding: '2px 4px',
+                   backgroundColor: COL.page, border: '1px solid ' + COL.grid});
+}
+
+// Two-column label / value row.
+function row(label, value, opts) {
+  opts = opts || {};
+  return zrow([
+    [label, {color: COL.inkSoft, margin: '1px 6px 1px 0', width: '240px'}],
+    [value, {color: opts.color || COL.ink, margin: '1px 0',
+             fontWeight: opts.bold ? 'bold' : 'normal'}],
+  ]);
+}
+
+function head(t) {
+  _z = 0;
+  return ui.Label(t, {
+    fontWeight: 'bold', fontSize: '13px', color: COL.headerBg,
+    margin: '16px 0 4px 0',
+    backgroundColor: '#e9eef7', padding: '6px 10px',
+  });
+}
+function note(t) {
+  return ui.Label(t, {
+    fontSize: '10px', color: COL.muted, fontStyle: 'italic',
+    margin: '0 0 6px 0',
+  });
+}
+
+// KPI stat tile: caption on top, big value, small sub-line.
 function makeKpiTile(caption, value, sub, valueColor, width) {
   return ui.Panel([
     ui.Label(caption, {fontSize: '10px', color: COL.muted,
@@ -72,6 +134,14 @@ function makeKpiTile(caption, value, sub, valueColor, width) {
     margin: '0 8px 0 0',
     width: width || '175px',
   });
+}
+
+// Chart axis options shared by the charts: muted text, light gridlines.
+function chartAxis(extra) {
+  var a = {textStyle: {color: COL.muted, fontSize: 10},
+           gridlines: {color: COL.grid}, baselineColor: COL.grid};
+  for (var k in extra) a[k] = extra[k];
+  return a;
 }
 
 
@@ -171,59 +241,6 @@ var REF = {
 
 
 // ====================================================================
-// UI helpers
-// ====================================================================
-// Labels default to a WHITE background, which shows as white strips on the
-// zebra rows — every cell must carry the row's own background color.
-function refRow(label, value, refKey, opts) {
-  opts = opts || {};
-  var bg = zbg();
-  return ui.Panel([
-    ui.Label(label, {fontSize: '11px', color: COL.inkSoft,
-                     margin: '1px 6px 1px 0', width: opts.w || '240px',
-                     backgroundColor: bg}),
-    ui.Label(value, {fontSize: '11px',
-                     color: opts.color || COL.ink,
-                     fontWeight: opts.bold ? 'bold' : 'normal',
-                     margin: '1px 6px 1px 0', width: '170px',
-                     backgroundColor: bg}),
-    ui.Label(REF[refKey] || '—',
-                    {fontSize: '10px', color: COL.muted, margin: '1px 0',
-                     fontStyle: 'italic', backgroundColor: bg}),
-  ], ui.Panel.Layout.flow('horizontal'),
-     {margin: '0', padding: '1px 4px', backgroundColor: bg});
-}
-function row(label, value, opts) {
-  opts = opts || {};
-  var bg = zbg();
-  return ui.Panel([
-    ui.Label(label, {fontSize: '11px', color: COL.inkSoft,
-                     margin: '1px 6px 1px 0', width: opts.w || '240px',
-                     backgroundColor: bg}),
-    ui.Label(value, {fontSize: '11px',
-                     color: opts.color || COL.ink,
-                     fontWeight: opts.bold ? 'bold' : 'normal',
-                     margin: '1px 0', backgroundColor: bg}),
-  ], ui.Panel.Layout.flow('horizontal'),
-     {margin: '0', padding: '1px 4px', backgroundColor: bg});
-}
-function head(t) {
-  _z = 0;   // restart zebra striping under every section header
-  return ui.Label(t, {
-    fontWeight: 'bold', fontSize: '13px', color: COL.headerBg,
-    margin: '16px 0 4px 0',
-    backgroundColor: '#e9eef7', padding: '6px 10px',
-  });
-}
-function note(t) {
-  return ui.Label(t, {
-    fontSize: '10px', color: COL.muted, fontStyle: 'italic',
-    margin: '0 0 6px 0',
-  });
-}
-
-
-// ====================================================================
 // Full-screen layout
 // ====================================================================
 ui.root.clear();
@@ -236,11 +253,10 @@ var SECTIONS = ['Unit Costs', 'DDF Curves',
 var sectionSelect = ui.Select({items: SECTIONS, value: SECTIONS[0]});
 sectionSelect.style().set('width', '240px');
 
+// Every widget inside the dark header needs backgroundColor set
+// explicitly — nested panels and labels default to white boxes.
 ui.root.add(ui.Panel([
   ui.Panel([
-    // Every widget inside the dark header needs backgroundColor set
-    // explicitly — nested panels AND labels default to white, which
-    // renders as white boxes swallowing the white text.
     ui.Label('Data Check — Shared Constants Inspector', {
       fontSize: '17px', fontWeight: 'bold', color: COL.headerInk,
       margin: '0', backgroundColor: COL.headerBg,
@@ -263,7 +279,7 @@ ui.root.add(ui.Panel([
   stretch: 'horizontal',
 }));
 
-// ---------- KPI row — everything below is already client-side ----------
+// ---------- KPI row ----------
 ui.root.add(ui.Panel([
   makeKpiTile('UNIT-COST ENTRIES', String(Object.keys(REF).length),
               'with source references'),
@@ -282,443 +298,174 @@ ui.root.add(ui.Panel([
     stretch: 'horizontal'}));
 
 // ---------- Content card ----------
-var body = ui.Panel({
-  style: {stretch: 'both', padding: '8px 14px 14px 14px',
-          backgroundColor: COL.page},
-  layout: ui.Panel.Layout.flow('vertical'),
-});
-ui.root.add(body);
-
 var content = ui.Panel({
   style: {stretch: 'both', padding: '4px 14px 14px 14px',
           backgroundColor: COL.surface, border: '1px solid ' + COL.grid},
   layout: ui.Panel.Layout.flow('vertical'),
 });
-body.add(content);
-
-sectionSelect.onChange(function(v) { render(v); });
+ui.root.add(ui.Panel([content], ui.Panel.Layout.flow('vertical'),
+  {stretch: 'both', padding: '8px 14px 14px 14px', backgroundColor: COL.page}));
 
 
 // ====================================================================
 // Dispatcher
 // ====================================================================
+var RENDER = {
+  'Unit Costs':     renderUnitCosts,
+  'DDF Curves':     renderDDF,
+  'Province Ratio': renderProvinceRatio,
+  'Crops & Fish':   renderCropsFish,
+  'Exposure':       renderExposure,
+  'Sanity Test':    renderSanity,
+  'Engine Test':    renderEngineTest,
+};
 function render(name) {
   content.clear();
-  if (name === 'Unit Costs')      return renderUnitCosts();
-  if (name === 'DDF Curves')      return renderDDF();
-  if (name === 'Province Ratio')  return renderProvinceRatio();
-  if (name === 'Crops & Fish')    return renderCropsFish();
-  if (name === 'Exposure')        return renderExposure();
-  if (name === 'Sanity Test')     return renderSanity();
-  if (name === 'Engine Test')     return renderEngineTest();
+  if (RENDER[name]) RENDER[name]();
 }
+sectionSelect.onChange(render);
 
 
 // ====================================================================
-// 7) ENGINE TEST — verification for the damage-engine rewrite (per-pixel
-// DDF + separate 100 m population pass both produce plausible-looking
-// wrong numbers when broken, so each test fails loudly):
-//   T1  evaluateImage vs evaluate (all curves must agree)
-//   T2  hand calculation (one house, checked with a calculator)
-//   T3  population scale (catches the 100× resolution trap)
-//   T4  the per-city measurements on a real event
-// ====================================================================
-function renderEngineTest() {
-  content.add(ui.Label('Engine Test — 2026-08-05 rewrite verification', {
-    fontSize: '14px', fontWeight: 'bold', color: '1a3d6d', margin: '0 0 2px 0',
-  }));
-  content.add(ui.Label(
-    'T1 and T2 run immediately. T4 needs an event id and costs a server call.',
-    {fontSize: '10px', color: '777', margin: '0 0 10px 0'}));
-
-  // ---------- T1: image vs scalar DDF ----------
-  content.add(ui.Label('T1 · evaluateImage vs evaluate (all curves)', {
-    fontSize: '12px', fontWeight: 'bold', color: '333', margin: '8px 0 4px 0',
-  }));
-  content.add(ui.Label(
-    'Both implementations walk the same control points; a mismatch means the ' +
-    'per-pixel path has drifted from the reference curve.',
-    {fontSize: '10px', color: '777', margin: '0 0 4px 0'}));
-
-  var t1Holder = ui.Panel({style: {margin: '0 0 6px 12px'}});
-  content.add(t1Holder);
-
-  var DEPTHS = [0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0];
-  Object.keys(DDF.CURVES).forEach(function(curveKey) {
-    var row = ui.Panel([
-      ui.Label(curveKey, {fontSize: '11px', width: '150px', color: '333'}),
-      ui.Label('checking...', {fontSize: '11px', color: '888'}),
-    ], ui.Panel.Layout.flow('horizontal'), {margin: '0'});
-    t1Holder.add(row);
-
-    // Sample the ratio image at each test depth by feeding it a constant
-    // depth image — the cheapest way to compare like with like.
-    var imgVals = ee.List(DEPTHS.map(function(d) {
-      return DDF.evaluateImage(curveKey, ee.Image.constant(d))
-                .reduceRegion({
-                  reducer: ee.Reducer.first(),
-                  geometry: ee.Geometry.Point([106.8, -6.2]).buffer(30),
-                  scale: 30,
-                }).values().get(0);
-    }));
-
-    imgVals.evaluate(function(vals, err) {
-      if (err || !vals) {
-        row.widgets().get(1).setValue('ERROR ' + err)
-           .style().set('color', 'c00');
-        return;
-      }
-      var worst = 0, worstAt = null;
-      DEPTHS.forEach(function(d, i) {
-        var expected = DDF.evaluate(curveKey, d);
-        var diff = Math.abs((vals[i] === null ? 0 : vals[i]) - expected);
-        if (diff > worst) { worst = diff; worstAt = d; }
-      });
-      var ok = worst < 1e-6;
-      row.widgets().get(1)
-        .setValue(ok ? '✓ match (max diff ' + worst.toExponential(1) + ')'
-                     : '✗ MISMATCH ' + worst.toFixed(4) + ' at ' + worstAt + ' m')
-        .style().set('color', ok ? '060' : 'c00');
-    });
-  });
-
-  // ---------- T2: hand calculation ----------
-  content.add(ui.Label('T2 · hand calculation', {
-    fontSize: '12px', fontWeight: 'bold', color: '333', margin: '12px 0 4px 0',
-  }));
-  var floor = UC.HOUSING.avg_floor_m2;          // 36 m²
-  var rate  = UC.HOUSING.rb_per_m2;             // 6,230,000 IDR/m²
-  var ratio = DDF.evaluate('residential', 1.5); // 0.50
-  var expect = floor * rate * ratio * 1.00;     // DKI Jakarta, ratio 1.00
-  content.add(ui.Label(
-    floor + ' m² × Rp ' + rate.toLocaleString() + '/m² × DDF(residential, ' +
-    '1.5 m)=' + ratio.toFixed(2) + ' × province_ratio 1.00',
-    {fontSize: '11px', color: '333', margin: '0 0 2px 12px'}));
-  content.add(ui.Label('= Rp ' + Math.round(expect).toLocaleString(), {
-    fontSize: '12px', fontWeight: 'bold', color: '060', margin: '0 0 4px 12px',
-  }));
-  content.add(ui.Label(
-    'Cross-check this against one housing row of a real Jitupasna CSV: ' +
-    'damage_idr ÷ (quantity × unit_cost_idr) must equal that row\'s ddf_ratio.',
-    {fontSize: '10px', color: '777', margin: '0 0 4px 12px'}));
-
-  // ---------- T3 + T4: need an event ----------
-  content.add(ui.Label('T3 · population scale   /   T4 · old vs new totals', {
-    fontSize: '12px', fontWeight: 'bold', color: '333', margin: '12px 0 4px 0',
-  }));
-  content.add(ui.Label(
-    'T3 is the 100× guard: WorldPop is a 100 m people-per-pixel grid, so ' +
-    'reducing it at 10 m would replicate every value 100 times. Exposed ' +
-    'population must never exceed the districts\' total population. ' +
-    'It checks the WorldPop path — floods and landslides. An earthquake\'s ' +
-    'published population comes from building counts instead, so this ' +
-    'test does not cover it.',
-    {fontSize: '10px', color: '777', margin: '0 0 4px 0'}));
-
-  var evtBox = ui.Textbox({
-    placeholder: 'event id, e.g. jakarta_2025_nov_20260804',
-    style: {width: '320px'},
-  });
-  var runBtn = ui.Button({label: 'Run T3 + T4'});
-  content.add(ui.Panel([evtBox, runBtn],
-    ui.Panel.Layout.flow('horizontal'), {margin: '0 0 6px 0'}));
-
-  var resHolder = ui.Panel({style: {margin: '0 0 6px 12px'}});
-  content.add(resHolder);
-
-  runBtn.onClick(function() {
-    var evt = evtBox.getValue();
-    resHolder.clear();
-    if (!evt) {
-      resHolder.add(ui.Label('Enter an event id first.',
-        {fontSize: '11px', color: 'c00'}));
-      return;
-    }
-    resHolder.add(ui.Label('Running (one server call)...',
-      {fontSize: '11px', color: '888'}));
-
-    var DMG = require('users/kurihara-yt/dibi:01_shared/06_damage_calc');
-    var CLS = require('users/kurihara-yt/dibi:01_shared/04_damage_classes');
-
-    var fc, totalPop;
-    try {
-      // The overview, not the full valuation. It carries the same population
-      // arithmetic, runs in seconds, and — unlike computeDamageFC over a whole
-      // province — will not hit the five-minute interactive limit, so this
-      // test stays runnable on the events that most need checking.
-      fc = DMG.computeOverviewFC(evt);
-
-      // Total population of the affected districts — the ceiling for T3.
-      var mask  = ee.Image(C.maskAssetFor(evt)).gt(0).selfMask();
-      var adm2  = ee.FeatureCollection(C.ASSETS.adm2).filterBounds(mask.geometry());
-      var popIC = ee.ImageCollection(CLS.POPULATION.asset)
-        .filter(ee.Filter.eq('year', CLS.POPULATION.year))
-        .filterBounds(mask.geometry());
-
-      // Summed on WorldPop's own grid, read from a MEMBER (mosaic() reports
-      // EPSG:4326 @ 1°; a rounded 100 m grid misses ~14 % of cells — either
-      // would drag the ceiling down and make a correct result look failed).
-      var popProj = ee.Image(popIC.first()).projection();
-      totalPop = popIC.mosaic().reduceRegions({
-        collection: adm2, reducer: ee.Reducer.sum().setOutputs(['pop']),
-        scale: popProj.nominalScale(), tileScale: 8,
-      }).aggregate_sum('pop');
-    } catch (e) {
-      resHolder.clear();
-      resHolder.add(ui.Label('Pipeline error: ' + e,
-        {fontSize: '11px', color: 'c00'}));
-      return;
-    }
-
-    ee.Dictionary({rows: fc, totalPop: totalPop}).evaluate(function(res, err) {
-      resHolder.clear();
-      if (err || !res) {
-        resHolder.add(ui.Label('Failed: ' + err,
-          {fontSize: '11px', color: 'c00'}));
-        return;
-      }
-
-      // The overview is one row per city, with the measurements as plain
-      // properties — not the long per-class format the valuation produces.
-      var popExposed = 0, floodHa = 0;
-      var cities = [];
-      res.rows.features.forEach(function(f) {
-        var p = f.properties;
-        if (!(p.flood_ha > 0)) return;
-        popExposed += (p.pop_exposed || 0);
-        floodHa    += (p.flood_ha    || 0);
-        cities.push(p);
-      });
-      cities.sort(function(a, b) {
-        return (b.pop_exposed || 0) - (a.pop_exposed || 0);
-      });
-
-      // ---- T3 verdict ----
-      var ceiling = res.totalPop || 0;
-      var t3ok = (ceiling > 0) && (popExposed <= ceiling);
-      resHolder.add(ui.Label('T3 · population scale', {
-        fontSize: '11px', fontWeight: 'bold', color: '333', margin: '0 0 2px 0',
-      }));
-      resHolder.add(ui.Label(
-        'in the flood ' + Math.round(popExposed).toLocaleString() +
-        '   /   districts total ' + Math.round(ceiling).toLocaleString() +
-        '   =   ' +
-        (ceiling > 0 ? (100 * popExposed / ceiling).toFixed(1) : '?') + ' %',
-        {fontSize: '11px', color: '333', margin: '0 0 2px 12px'}));
-      resHolder.add(ui.Label(
-        t3ok ? '✓ within the district population'
-             : '✗ EXCEEDS the district population. The population raster is ' +
-               '~92.8 m; if it is being reduced on a 10 m grid every value is ' +
-               'counted 100 times. A ratio near 100x means exactly that.',
-        {fontSize: '11px', color: t3ok ? '060' : 'c00',
-         fontWeight: 'bold', margin: '0 0 8px 12px'}));
-
-      // ---- T4: the measurements themselves ----
-      resHolder.add(ui.Label('T4 · what was measured, by city', {
-        fontSize: '11px', fontWeight: 'bold', color: '333', margin: '0 0 2px 0',
-      }));
-      resHolder.add(ui.Label(
-        'Sanity-check the inputs before trusting any valuation built on them: ' +
-        'a flooded area larger than the city, or a mean depth of tens of ' +
-        'metres, means the problem is upstream in Step 1, not in the costs.',
-        {fontSize: '10px', color: '777', margin: '0 0 4px 12px'}));
-
-      cities.slice(0, 15).forEach(function(c) {
-        resHolder.add(ui.Panel([
-          ui.Label(c.city_name, {fontSize: '10px', width: '150px', color: '333'}),
-          ui.Label(Math.round(c.pop_exposed).toLocaleString() + ' people',
-                   {fontSize: '10px', width: '110px', color: '333'}),
-          ui.Label(Math.round(c.flood_ha).toLocaleString() + ' ha',
-                   {fontSize: '10px', width: '90px', color: '333'}),
-          ui.Label((c.depth_mean_m || 0).toFixed(2) + ' m',
-                   {fontSize: '10px', color: '777'}),
-        ], ui.Panel.Layout.flow('horizontal'), {margin: '0 0 0 12px'}));
-      });
-      if (cities.length > 15) {
-        resHolder.add(ui.Label('and ' + (cities.length - 15) + ' more.',
-          {fontSize: '10px', color: '888', margin: '0 0 0 12px'}));
-      }
-
-      resHolder.add(ui.Label(
-        'Total: ' + Math.round(floodHa).toLocaleString() + ' ha under water ' +
-        'across ' + cities.length + ' cities.', {
-        fontSize: '12px', fontWeight: 'bold', color: '060',
-        margin: '6px 0 0 12px'}));
-      resHolder.add(ui.Label(
-        'Per-class damage totals are no longer checked here: valuing a whole ' +
-        'province cannot finish inside the interactive time limit. Check them ' +
-        'by clicking a city in Step 2, or in the saved CSV.',
-        {fontSize: '10px', color: '777', margin: '4px 0 0 12px'}));
-    });
-  });
-}
-
-
-// ====================================================================
-// 1) UNIT COSTS — now with Source column
+// 1) UNIT COSTS — value + source column
 // ====================================================================
 function renderUnitCosts() {
-  // Header row for the 3-column layout
-  function tblHead() {
-    _z = 0;
-    return ui.Panel([
-      ui.Label('Item',  {fontSize: '11px', fontWeight: 'bold',
-                         color: COL.inkSoft, width: '240px', margin: '0 6px 0 0',
-                         backgroundColor: COL.page}),
-      ui.Label('Value', {fontSize: '11px', fontWeight: 'bold',
-                         color: COL.inkSoft, width: '170px', margin: '0 6px 0 0',
-                         backgroundColor: COL.page}),
-      ui.Label('Reference / Source',
-                        {fontSize: '11px', fontWeight: 'bold', color: COL.inkSoft,
-                         backgroundColor: COL.page}),
-    ], ui.Panel.Layout.flow('horizontal'),
-       {margin: '4px 0 2px 0', padding: '2px 4px',
-        backgroundColor: COL.page, border: '1px solid ' + COL.grid});
+  // One table: header + rows of [label, 'GROUP.key', unit, bold].
+  // unit omitted -> idr(value); otherwise value + unit ('' = plain).
+  function unitTable(title, rows, noteText) {
+    content.add(head(title));
+    if (noteText) content.add(note(noteText));
+    content.add(tableHead([['Item', '240px', '0 6px 0 0'],
+                           ['Value', '170px', '0 6px 0 0'],
+                           ['Reference / Source']], '4px 0 2px 0'));
+    rows.forEach(function(r) {
+      var v = ucValue(r[1]);
+      content.add(zrow([
+        [r[0], {color: COL.inkSoft, margin: '1px 6px 1px 0', width: '240px'}],
+        [r[2] == null ? idr(v) : v + r[2],
+         {color: COL.ink, margin: '1px 6px 1px 0', width: '170px',
+          fontWeight: r[3] ? 'bold' : 'normal'}],
+        [REF[r[1]] || '—', {fontSize: '10px', color: COL.muted,
+                            margin: '1px 0', fontStyle: 'italic'}],
+      ]));
+    });
   }
 
   content.add(note('Indonesian unit costs at 100 % damage (DKI Jakarta 2025 baseline). ' +
     'Multiply by DDF(depth) for damage ratio and PROVINCE_RATIO for locality.'));
 
-  content.add(head('C-4 Housing (Permukiman) — 100 % base'));
-  content.add(tblHead());
-  content.add(refRow('house / m² (Rumah C/D/E)', idr(UC.HOUSING.rb_per_m2),    'HOUSING.rb_per_m2', {bold: true}));
-  content.add(refRow('avg floor area', UC.HOUSING.avg_floor_m2 + ' m²', 'HOUSING.avg_floor_m2'));
-  content.add(refRow('furniture / HH', idr(UC.HOUSING.furniture_per_hh), 'HOUSING.furniture_per_hh'));
-  content.add(refRow('utility / unit', idr(UC.HOUSING.utility_per_unit), 'HOUSING.utility_per_unit'));
-  content.add(refRow('occupants / house',
-    UC.HOUSING.persons_per_house + ' people', 'HOUSING.persons_per_house'));
+  unitTable('C-4 Housing (Permukiman) — 100 % base', [
+    ['house / m² (Rumah C/D/E)', 'HOUSING.rb_per_m2', null, true],
+    ['avg floor area',           'HOUSING.avg_floor_m2', ' m²'],
+    ['furniture / HH',           'HOUSING.furniture_per_hh'],
+    ['utility / unit',           'HOUSING.utility_per_unit'],
+    ['occupants / house',        'HOUSING.persons_per_house', ' people'],
+  ]);
 
-  content.add(head('C-5 Sosial (Buildings, 100 % base)'));
-  content.add(tblHead());
-  content.add(refRow('hospital / m² (Gedung TS)', idr(UC.INFRA.health_per_m2),    'INFRA.health_per_m2', {bold: true}));
-  content.add(refRow('puskesmas / m² (Gedung Sederhana)', idr(UC.INFRA.puskesmas_per_m2), 'INFRA.puskesmas_per_m2'));
-  content.add(refRow('university / m² (Gedung TS)', idr(UC.INFRA.university_per_m2), 'INFRA.university_per_m2'));
-  content.add(refRow('school / madrasah / m²', idr(UC.INFRA.edu_per_m2),          'INFRA.edu_per_m2'));
-  content.add(refRow('worship / m² (masjid raya)', idr(UC.INFRA.worship_per_m2), 'INFRA.worship_per_m2'));
-  content.add(refRow('government office / m²', idr(UC.INFRA.gov_office_per_m2),  'INFRA.gov_office_per_m2'));
-  content.add(refRow('market / m² (4-story HSB)', idr(UC.INFRA.market_per_m2),   'INFRA.market_per_m2'));
+  unitTable('C-5 Sosial (Buildings, 100 % base)', [
+    ['hospital / m² (Gedung TS)',           'INFRA.health_per_m2', null, true],
+    ['puskesmas / m² (Gedung Sederhana)',   'INFRA.puskesmas_per_m2'],
+    ['university / m² (Gedung TS)',         'INFRA.university_per_m2'],
+    ['school / madrasah / m²',              'INFRA.edu_per_m2'],
+    ['worship / m² (masjid raya)',          'INFRA.worship_per_m2'],
+    ['government office / m²',              'INFRA.gov_office_per_m2'],
+    ['market / m² (4-story HSB)',           'INFRA.market_per_m2'],
+  ]);
 
-  content.add(head('C-5 Infrastruktur — Roads (per grade)'));
-  content.add(tblHead());
-  content.add(refRow('road nasional / km',    idr(UC.INFRA.road_nasional_per_km),  'INFRA.road_nasional_per_km', {bold: true}));
-  content.add(refRow('road kabupaten / km',   idr(UC.INFRA.road_kabupaten_per_km), 'INFRA.road_kabupaten_per_km'));
-  content.add(refRow('road desa / km',        idr(UC.INFRA.road_desa_per_km),      'INFRA.road_desa_per_km'));
-  content.add(refRow('road tol / km',         idr(UC.INFRA.road_tol_per_km),       'INFRA.road_tol_per_km'));
-  content.add(refRow('road embankment / m³',  idr(UC.INFRA.road_embankment_per_m3),'INFRA.road_embankment_per_m3'));
+  unitTable('C-5 Infrastruktur — Roads (per grade)', [
+    ['road nasional / km',    'INFRA.road_nasional_per_km', null, true],
+    ['road kabupaten / km',   'INFRA.road_kabupaten_per_km'],
+    ['road desa / km',        'INFRA.road_desa_per_km'],
+    ['road tol / km',         'INFRA.road_tol_per_km'],
+    ['road embankment / m³',  'INFRA.road_embankment_per_m3'],
+  ]);
 
-  content.add(head('C-5 Infrastruktur — Bridges / Power / Water / Telecom'));
-  content.add(tblHead());
-  content.add(refRow('bridge / m',            idr(UC.INFRA.bridge_per_m),      'INFRA.bridge_per_m'));
-  content.add(refRow('bridge avg length',     UC.INFRA.bridge_avg_m + ' m',    'INFRA.bridge_avg_m'));
-  content.add(refRow('power line / km',       idr(UC.INFRA.power_line_per_km), 'INFRA.power_line_per_km'));
-  content.add(refRow('substation each',       idr(UC.INFRA.substation_each),   'INFRA.substation_each'));
-  content.add(refRow('plant / MW',            idr(UC.INFRA.plant_per_mw),      'INFRA.plant_per_mw'));
-  content.add(refRow('geothermal / MW (PLTP)',idr(UC.INFRA.geothermal_per_mw), 'INFRA.geothermal_per_mw'));
-  content.add(refRow('water treatment / Lps', idr(UC.INFRA.water_treatment_per_lps), 'INFRA.water_treatment_per_lps'));
-  content.add(refRow('water supply / m',      idr(UC.INFRA.water_supply_per_m),'INFRA.water_supply_per_m'));
-  content.add(refRow('telecom BTS / unit',    idr(UC.INFRA.telecom_per_unit),  'INFRA.telecom_per_unit'));
-  content.add(refRow('airport (each)',        idr(UC.INFRA.airport_each),      'INFRA.airport_each'));
-  content.add(refRow('seaport (each)',        idr(UC.INFRA.seaport_each),      'INFRA.seaport_each'));
-  content.add(refRow('embankment (concrete)/m', idr(UC.INFRA.embankment_per_m), 'INFRA.embankment_per_m'));
-  content.add(refRow('mangrove / ha',         idr(UC.INFRA.mangrove_per_ha),   'INFRA.mangrove_per_ha'));
+  unitTable('C-5 Infrastruktur — Bridges / Power / Water / Telecom', [
+    ['bridge / m',            'INFRA.bridge_per_m'],
+    ['bridge avg length',     'INFRA.bridge_avg_m', ' m'],
+    ['power line / km',       'INFRA.power_line_per_km'],
+    ['substation each',       'INFRA.substation_each'],
+    ['plant / MW',            'INFRA.plant_per_mw'],
+    ['geothermal / MW (PLTP)','INFRA.geothermal_per_mw'],
+    ['water treatment / Lps', 'INFRA.water_treatment_per_lps'],
+    ['water supply / m',      'INFRA.water_supply_per_m'],
+    ['telecom BTS / unit',    'INFRA.telecom_per_unit'],
+    ['airport (each)',        'INFRA.airport_each'],
+    ['seaport (each)',        'INFRA.seaport_each'],
+    ['embankment (concrete)/m', 'INFRA.embankment_per_m'],
+    ['mangrove / ha',         'INFRA.mangrove_per_ha'],
+  ]);
 
-  content.add(head('C-2 Agricultural'));
-  content.add(tblHead());
-  content.add(refRow('rice GKP / kg',         idr(UC.AGRI.rice_gkp_per_kg),    'AGRI.rice_gkp_per_kg'));
-  content.add(refRow('rice milled / kg',      idr(UC.AGRI.rice_milled_per_kg), 'AGRI.rice_milled_per_kg'));
-  content.add(refRow('rice GKG / kg',         idr(UC.AGRI.rice_gkg_per_kg),    'AGRI.rice_gkg_per_kg'));
-  content.add(refRow('rice yield / ha',       UC.AGRI.rice_yield_kg_per_ha + ' kg', 'AGRI.rice_yield_kg_per_ha'));
-  content.add(refRow('perennial replant / ha', idr(UC.AGRI.perennial_replant_per_ha), 'AGRI.perennial_replant_per_ha', {bold: true}));
-  content.add(refRow('coffee / kg',           idr(UC.AGRI.coffee_per_kg),      'AGRI.coffee_per_kg'));
-  content.add(refRow('cocoa / kg',            idr(UC.AGRI.cocoa_per_kg),       'AGRI.cocoa_per_kg'));
-  content.add(refRow('egg / kg',              idr(UC.AGRI.egg_per_kg),         'AGRI.egg_per_kg'));
-  content.add(refRow('milk / L',              idr(UC.AGRI.milk_per_l),         'AGRI.milk_per_l'));
-  content.add(refRow('cattle / head',         idr(UC.AGRI.cattle_per_head),    'AGRI.cattle_per_head'));
-  content.add(refRow('goat / head',           idr(UC.AGRI.goat_per_head),      'AGRI.goat_per_head'));
-  content.add(refRow('poultry feed / kg',     idr(UC.AGRI.poultry_feed_per_kg),'AGRI.poultry_feed_per_kg'));
-  content.add(refRow('ruminant feed / kg',    idr(UC.AGRI.ruminant_feed_per_kg),'AGRI.ruminant_feed_per_kg'));
-  content.add(refRow('beef / kg',             idr(UC.AGRI.beef_per_kg),        'AGRI.beef_per_kg'));
-  content.add(refRow('chicken meat / kg',     idr(UC.AGRI.chicken_meat_per_kg),'AGRI.chicken_meat_per_kg'));
-  content.add(refRow('beehive (each)',        idr(UC.AGRI.beehive_each),       'AGRI.beehive_each'));
-  content.add(refRow('timber / m³',           idr(UC.AGRI.timber_per_m3),      'AGRI.timber_per_m3'));
-  content.add(refRow('forest replant proxy / ha', idr(UC.AGRI.timber_per_ha_proxy), 'AGRI.timber_per_ha_proxy'));
-  content.add(refRow('catfish/tilapia / kg',  idr(UC.AGRI.catfish_tilapia_per_kg), 'AGRI.catfish_tilapia_per_kg'));
-  content.add(refRow('fingerling (each)',     idr(UC.AGRI.fingerling_each),    'AGRI.fingerling_each'));
-  content.add(refRow('fishing vessel / GT',   idr(UC.AGRI.vessel_per_gt),      'AGRI.vessel_per_gt'));
+  unitTable('C-2 Agricultural', [
+    ['rice GKP / kg',         'AGRI.rice_gkp_per_kg'],
+    ['rice milled / kg',      'AGRI.rice_milled_per_kg'],
+    ['rice GKG / kg',         'AGRI.rice_gkg_per_kg'],
+    ['rice yield / ha',       'AGRI.rice_yield_kg_per_ha', ' kg'],
+    ['perennial replant / ha', 'AGRI.perennial_replant_per_ha', null, true],
+    ['coffee / kg',           'AGRI.coffee_per_kg'],
+    ['cocoa / kg',            'AGRI.cocoa_per_kg'],
+    ['egg / kg',              'AGRI.egg_per_kg'],
+    ['milk / L',              'AGRI.milk_per_l'],
+    ['cattle / head',         'AGRI.cattle_per_head'],
+    ['goat / head',           'AGRI.goat_per_head'],
+    ['poultry feed / kg',     'AGRI.poultry_feed_per_kg'],
+    ['ruminant feed / kg',    'AGRI.ruminant_feed_per_kg'],
+    ['beef / kg',             'AGRI.beef_per_kg'],
+    ['chicken meat / kg',     'AGRI.chicken_meat_per_kg'],
+    ['beehive (each)',        'AGRI.beehive_each'],
+    ['timber / m³',           'AGRI.timber_per_m3'],
+    ['forest replant proxy / ha', 'AGRI.timber_per_ha_proxy'],
+    ['catfish/tilapia / kg',  'AGRI.catfish_tilapia_per_kg'],
+    ['fingerling (each)',     'AGRI.fingerling_each'],
+    ['fishing vessel / GT',   'AGRI.vessel_per_gt'],
+  ]);
 
-  content.add(head('C-3 Other Productive (Industry / Commerce)'));
-  content.add(tblHead());
-  content.add(refRow('factory / m²',          idr(UC.COMMERCE.factory_per_m2),  'COMMERCE.factory_per_m2'));
-  content.add(refRow('shop / m²',             idr(UC.COMMERCE.shop_per_m2),     'COMMERCE.shop_per_m2'));
-  content.add(refRow('warehouse / m²',        idr(UC.COMMERCE.warehouse_per_m2),'COMMERCE.warehouse_per_m2'));
-  content.add(refRow('hotel / m²',            idr(UC.COMMERCE.hotel_per_m2),    'COMMERCE.hotel_per_m2'));
-  content.add(refRow('office / m²',           idr(UC.COMMERCE.office_per_m2),   'COMMERCE.office_per_m2'));
-  content.add(refRow('avg shop area',         UC.COMMERCE.shop_avg_m2 + ' m²',   'COMMERCE.shop_avg_m2'));
-  content.add(refRow('avg warehouse area',    UC.COMMERCE.warehouse_avg_m2 + ' m²', 'COMMERCE.warehouse_avg_m2'));
-  content.add(refRow('avg factory area',      UC.COMMERCE.factory_avg_m2 + ' m²',   'COMMERCE.factory_avg_m2'));
-  content.add(refRow('avg hotel area',        UC.COMMERCE.hotel_avg_m2 + ' m²',     'COMMERCE.hotel_avg_m2'));
-  content.add(refRow('avg office area',       UC.COMMERCE.office_avg_m2 + ' m²',    'COMMERCE.office_avg_m2'));
+  unitTable('C-3 Other Productive (Industry / Commerce)', [
+    ['factory / m²',          'COMMERCE.factory_per_m2'],
+    ['shop / m²',             'COMMERCE.shop_per_m2'],
+    ['warehouse / m²',        'COMMERCE.warehouse_per_m2'],
+    ['hotel / m²',            'COMMERCE.hotel_per_m2'],
+    ['office / m²',           'COMMERCE.office_per_m2'],
+    ['avg shop area',         'COMMERCE.shop_avg_m2', ' m²'],
+    ['avg warehouse area',    'COMMERCE.warehouse_avg_m2', ' m²'],
+    ['avg factory area',      'COMMERCE.factory_avg_m2', ' m²'],
+    ['avg hotel area',        'COMMERCE.hotel_avg_m2', ' m²'],
+    ['avg office area',       'COMMERCE.office_avg_m2', ' m²'],
+  ]);
 
-  content.add(head('Indirect L-1..L-4 (Jakarta / National)'));
-  content.add(tblHead());
-  content.add(refRow('L-1 worker / day (Jakarta)',
-    idr(UC.INDIRECT.business_per_worker_day_jakarta),
-    'INDIRECT.business_per_worker_day_jakarta'));
-  content.add(refRow('L-1 worker / day (national)',
-    idr(UC.INDIRECT.business_per_worker_day_national),
-    'INDIRECT.business_per_worker_day_national'));
-  content.add(refRow('L-2 HH / event (Jakarta)',
-    idr(UC.INDIRECT.cleaning_materials_jakarta),
-    'INDIRECT.cleaning_materials_jakarta'));
-  content.add(refRow('L-2 HH / event (national)',
-    idr(UC.INDIRECT.cleaning_materials_national),
-    'INDIRECT.cleaning_materials_national'));
-  content.add(refRow('L-3 meals / day (Jakarta)',
-    idr(UC.INDIRECT.substitute_meals_jakarta),
-    'INDIRECT.substitute_meals_jakarta'));
-  content.add(refRow('L-3 meals / day (national)',
-    idr(UC.INDIRECT.substitute_meals_national),
-    'INDIRECT.substitute_meals_national'));
-  content.add(refRow('L-4 labor / day (Jakarta)',
-    idr(UC.INDIRECT.cleaning_labor_jakarta),
-    'INDIRECT.cleaning_labor_jakarta'));
-  content.add(refRow('L-4 labor / day (national)',
-    idr(UC.INDIRECT.cleaning_labor_national),
-    'INDIRECT.cleaning_labor_national'));
-  content.add(refRow('default business days',
-    String(UC.INDIRECT.default_business_days),
-    'INDIRECT.default_business_days'));
-  content.add(refRow('default meals days',
-    String(UC.INDIRECT.default_meals_days),
-    'INDIRECT.default_meals_days'));
-  content.add(refRow('default labor days',
-    String(UC.INDIRECT.default_labor_days),
-    'INDIRECT.default_labor_days'));
+  unitTable('Indirect L-1..L-4 (Jakarta / National)', [
+    ['L-1 worker / day (Jakarta)',  'INDIRECT.business_per_worker_day_jakarta'],
+    ['L-1 worker / day (national)', 'INDIRECT.business_per_worker_day_national'],
+    ['L-2 HH / event (Jakarta)',    'INDIRECT.cleaning_materials_jakarta'],
+    ['L-2 HH / event (national)',   'INDIRECT.cleaning_materials_national'],
+    ['L-3 meals / day (Jakarta)',   'INDIRECT.substitute_meals_jakarta'],
+    ['L-3 meals / day (national)',  'INDIRECT.substitute_meals_national'],
+    ['L-4 labor / day (Jakarta)',   'INDIRECT.cleaning_labor_jakarta'],
+    ['L-4 labor / day (national)',  'INDIRECT.cleaning_labor_national'],
+    ['default business days',       'INDIRECT.default_business_days', ''],
+    ['default meals days',          'INDIRECT.default_meals_days', ''],
+    ['default labor days',          'INDIRECT.default_labor_days', ''],
+  ]);
 
-  content.add(head('RF-LULC class → cost (drives land_cover_ha damage classes)'));
-  content.add(note('In-house Random-Forest LULC (BNPB/lulc_idn_2025_30m, 30 m). ' +
-    'Unpriced classes (3 Sand · 5 City · 6 Water) carry no land-cover damage.'));
-  content.add(tblHead());
+  unitTable('RF-LULC class → cost (drives land_cover_ha damage classes)', [],
+    'In-house Random-Forest LULC (BNPB/lulc_idn_2025_30m, 30 m). ' +
+    'Unpriced classes (3 Sand · 5 City · 6 Water) carry no land-cover damage.');
   var LULC_LABEL = {1: 'Rice (Sawah)', 2: 'Corn (Tegalan)',
                     4: 'Forest (Hutan)', 7: 'Palm oil (Kebun)'};
+  var LULC_NOTE = {1: 'rice price × yield [G]',
+                   2: 'corn production value [G]',
+                   4: 'KLHK critical-land rehab, 14-17 juta/ha mid-point'};
   Object.keys(UC.LULC_TO_COST).forEach(function(id) {
     var e = UC.LULC_TO_COST[id];
-    var bg = zbg();
-    content.add(ui.Panel([
-      ui.Label('class ' + id + ' — ' + (LULC_LABEL[id] || e.key),
-        {fontSize: '11px', color: COL.inkSoft, width: '240px',
-         margin: '0 6px 0 0', backgroundColor: bg}),
-      ui.Label('[' + e.sendai + ']  ' + idr(e.cost_per_ha) + ' / ha',
-        {fontSize: '11px', color: COL.ink, width: '170px',
-         margin: '0 6px 0 0', backgroundColor: bg}),
-      ui.Label(id === '1' ? 'rice price × yield [G]' :
-               id === '2' ? 'corn production value [G]' :
-               id === '4' ? 'KLHK critical-land rehab, 14-17 juta/ha mid-point' :
-                            'Perkebunan — Jitupasna past requests, natl avg [E], no prov ratio',
-        {fontSize: '10px', color: COL.muted, fontStyle: 'italic',
-         backgroundColor: bg}),
-    ], ui.Panel.Layout.flow('horizontal'),
-       {margin: '0', padding: '1px 4px', backgroundColor: bg}));
+    content.add(zrow([
+      ['class ' + id + ' — ' + (LULC_LABEL[id] || e.key),
+       {color: COL.inkSoft, width: '240px', margin: '0 6px 0 0'}],
+      ['[' + e.sendai + ']  ' + idr(e.cost_per_ha) + ' / ha',
+       {color: COL.ink, width: '170px', margin: '0 6px 0 0'}],
+      [LULC_NOTE[id] ||
+       'Perkebunan — Jitupasna past requests, natl avg [E], no prov ratio',
+       {fontSize: '10px', color: COL.muted, fontStyle: 'italic'}],
+    ]));
   });
 }
 
@@ -732,8 +479,8 @@ function renderDDF() {
     'Asian region, piecewise-linear between control points.'));
 
   var names = Object.keys(DDF.CURVES);
-  var items = ['(All curves)'].concat(names);
-  var curveSel = ui.Select({items: items, value: 'residential'});
+  var curveSel = ui.Select({items: ['(All curves)'].concat(names),
+                            value: 'residential'});
   curveSel.style().set('width', '220px');
   content.add(ui.Panel([
     ui.Label('Curve:', {fontSize: '11px', fontWeight: 'bold',
@@ -746,114 +493,78 @@ function renderDDF() {
   content.add(chartHolder);
   content.add(tableHolder);
 
-  function makeChart(curveName) {
+  // Line chart of depth -> ratio features; both charts share the axes.
+  function ddfChart(feats, series, extra) {
+    var axisTitle = {color: COL.muted, italic: false};
+    var opts = {
+      titleTextStyle: {color: COL.inkSoft, fontSize: 12, bold: true},
+      hAxis: chartAxis({title: 'Depth (m)', minValue: 0,
+                        titleTextStyle: axisTitle}),
+      vAxis: chartAxis({title: 'Damage ratio',
+                        viewWindow: {min: 0, max: 1.0},
+                        ticks: [0, 0.25, 0.5, 0.75, 1.0],
+                        format: 'percent',
+                        titleTextStyle: axisTitle}),
+      backgroundColor: COL.surface,
+    };
+    for (var k in extra) opts[k] = extra[k];
+    return ui.Chart.feature.byFeature(ee.FeatureCollection(feats), 'depth', series)
+      .setChartType('LineChart')
+      .setOptions(opts);
+  }
+
+  function showCurve(curveName) {
     chartHolder.clear();
     tableHolder.clear();
 
     if (curveName === '(All curves)') {
       var xs = [];
       for (var d = 0; d <= 6.0001; d += 0.25) xs.push(+d.toFixed(2));
-      var feats = xs.map(function(d) {
+      chartHolder.add(ddfChart(xs.map(function(d) {
         var p = {depth: d};
         names.forEach(function(n) { p[n] = DDF.evaluate(n, d); });
         return ee.Feature(null, p);
-      });
-      var fc = ee.FeatureCollection(feats);
-      var chart = ui.Chart.feature.byFeature(fc, 'depth', names)
-        .setChartType('LineChart')
-        .setOptions({
-          title: 'All DDF curves (depth → damage ratio)',
-          titleTextStyle: {color: COL.inkSoft, fontSize: 12, bold: true},
-          hAxis: {title: 'Depth (m)', minValue: 0,
-                  titleTextStyle: {color: COL.muted, italic: false},
-                  textStyle: {color: COL.muted, fontSize: 10},
-                  gridlines: {color: COL.grid},
-                  baselineColor: COL.grid},
-          vAxis: {title: 'Damage ratio',
-                  viewWindow: {min: 0, max: 1.0},
-                  ticks: [0, 0.25, 0.5, 0.75, 1.0],
-                  format: 'percent',
-                  titleTextStyle: {color: COL.muted, italic: false},
-                  textStyle: {color: COL.muted, fontSize: 10},
-                  gridlines: {color: COL.grid},
-                  baselineColor: COL.grid},
-          height: 380,
-          lineWidth: 2,
-          pointSize: 2,
-          colors: CAT,
-          backgroundColor: COL.surface,
-          legend: {position: 'right',
-                   textStyle: {color: COL.inkSoft, fontSize: 11}},
-        });
-      chartHolder.add(chart);
+      }), names, {
+        title: 'All DDF curves (depth → damage ratio)',
+        height: 380,
+        lineWidth: 2,
+        pointSize: 2,
+        colors: CAT,
+        legend: {position: 'right',
+                 textStyle: {color: COL.inkSoft, fontSize: 11}},
+      }));
 
       tableHolder.add(ui.Label('Damage ratios at common depths (%):',
         {fontWeight: 'bold', fontSize: '12px', color: '333',
          margin: '8px 0 4px 0'}));
       var depthGrid = [0.25, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0];
-      _z = 0;
-      var hdrCells = [ui.Label('Curve', {fontSize: '11px',
-        width: '170px', fontWeight: 'bold', color: COL.inkSoft,
-        backgroundColor: COL.page})];
-      depthGrid.forEach(function(d) {
-        hdrCells.push(ui.Label(d + ' m', {fontSize: '11px',
-          width: '60px', fontWeight: 'bold', color: COL.inkSoft,
-          backgroundColor: COL.page}));
-      });
-      tableHolder.add(ui.Panel(hdrCells,
-        ui.Panel.Layout.flow('horizontal'),
-        {margin: '0', padding: '2px 4px',
-         backgroundColor: COL.page, border: '1px solid ' + COL.grid}));
+      tableHolder.add(tableHead(
+        [['Curve', '170px']].concat(depthGrid.map(function(d) {
+          return [d + ' m', '60px'];
+        })), '0'));
       names.forEach(function(n) {
-        var bg = zbg();
-        var cells = [ui.Label(n, {fontSize: '11px',
-          width: '170px', color: '#333333', backgroundColor: bg})];
+        var cells = [[n, {width: '170px', color: '#333333'}]];
         depthGrid.forEach(function(d) {
           var r = DDF.evaluate(n, d);
-          cells.push(ui.Label(pct(r),
-            {fontSize: '11px', width: '60px',
-             color: r > 0.5 ? COL.critical : '#333333',
-             fontWeight: r > 0.5 ? 'bold' : 'normal',
-             backgroundColor: bg}));
+          cells.push([pct(r), {width: '60px',
+                               color: r > 0.5 ? COL.critical : '#333333',
+                               fontWeight: r > 0.5 ? 'bold' : 'normal'}]);
         });
-        tableHolder.add(ui.Panel(cells,
-          ui.Panel.Layout.flow('horizontal'),
-          {margin: '0', padding: '1px 4px', backgroundColor: bg}));
+        tableHolder.add(zrow(cells));
       });
     } else {
       var c = DDF.CURVES[curveName];
-      var sFeats = c.depths_m.map(function(d, i) {
+      chartHolder.add(ddfChart(c.depths_m.map(function(d, i) {
         return ee.Feature(null, {depth: d, ratio: c.ratios[i]});
-      });
-      var fc = ee.FeatureCollection(sFeats);
-      var chart = ui.Chart.feature.byFeature(fc, 'depth', ['ratio'])
-        .setChartType('LineChart')
-        .setOptions({
-          title: curveName + ' DDF',
-          titleTextStyle: {color: COL.inkSoft, fontSize: 12, bold: true},
-          hAxis: {title: 'Depth (m)', minValue: 0,
-                  titleTextStyle: {color: COL.muted, italic: false},
-                  textStyle: {color: COL.muted, fontSize: 10},
-                  gridlines: {color: COL.grid},
-                  baselineColor: COL.grid},
-          vAxis: {title: 'Damage ratio',
-                  viewWindow: {min: 0, max: 1.0},
-                  ticks: [0, 0.25, 0.5, 0.75, 1.0],
-                  format: 'percent',
-                  titleTextStyle: {color: COL.muted, italic: false},
-                  textStyle: {color: COL.muted, fontSize: 10},
-                  gridlines: {color: COL.grid},
-                  baselineColor: COL.grid},
-          height: 320,
-          colors: [COL.blue],
-          backgroundColor: COL.surface,
-          lineWidth: 3,
-          pointSize: 5,
-          legend: {position: 'none'},
-        });
-      chartHolder.add(chart);
+      }), ['ratio'], {
+        title: curveName + ' DDF',
+        height: 320,
+        colors: [COL.blue],
+        lineWidth: 3,
+        pointSize: 5,
+        legend: {position: 'none'},
+      }));
 
-      // Tables with explanatory notes
       tableHolder.add(ui.Label(
         'Control points (defined by JRC paper):',
         {fontWeight: 'bold', fontSize: '12px', color: '333',
@@ -863,38 +574,21 @@ function renderDDF() {
         'Huizinga et al. 2017 (Asian region).',
         {fontSize: '10px', color: '666', fontStyle: 'italic',
          margin: '0 0 4px 0'}));
-      _z = 0;
-      tableHolder.add(ui.Panel([
-        ui.Label('Depth (m)',    {fontSize: '11px', width: '110px',
-                                  fontWeight: 'bold', color: COL.inkSoft,
-                                  backgroundColor: COL.page}),
-        ui.Label('Damage ratio', {fontSize: '11px', width: '120px',
-                                  fontWeight: 'bold', color: COL.inkSoft,
-                                  backgroundColor: COL.page}),
-      ], ui.Panel.Layout.flow('horizontal'),
-         {margin: '0', padding: '2px 4px',
-          backgroundColor: COL.page, border: '1px solid ' + COL.grid}));
+      tableHolder.add(tableHead([['Depth (m)', '110px'],
+                                 ['Damage ratio', '120px']], '0'));
       for (var i = 0; i < c.depths_m.length; i++) {
-        var bg = zbg();
-        tableHolder.add(ui.Panel([
-          ui.Label(c.depths_m[i].toFixed(2),
-            {fontSize: '11px', width: '110px', color: COL.ink,
-             backgroundColor: bg}),
-          ui.Label(pct(c.ratios[i]),
-            {fontSize: '11px', width: '120px',
-             color: COL.critical, fontWeight: 'bold',
-             backgroundColor: bg}),
-        ], ui.Panel.Layout.flow('horizontal'),
-           {margin: '0', padding: '1px 4px', backgroundColor: bg}));
+        tableHolder.add(zrow([
+          [c.depths_m[i].toFixed(2), {width: '110px', color: COL.ink}],
+          [pct(c.ratios[i]), {width: '120px', color: COL.critical,
+                              fontWeight: 'bold'}],
+        ]));
       }
-
     }
   }
 
-  curveSel.onChange(makeChart);
-  makeChart('residential');
+  curveSel.onChange(showCurve);
+  showCurve('residential');
 
-  // Aliases section — with explanatory note
   content.add(head('Aliases — convenience names'));
   content.add(ui.Label(
     'Alternate keys mapping Indonesian / Jitupasna / DIBI vocabulary to ' +
@@ -903,15 +597,7 @@ function renderDDF() {
     'Identical result either way.',
     {fontSize: '10px', color: '666', fontStyle: 'italic',
      margin: '0 0 6px 0'}));
-  content.add(ui.Panel([
-    ui.Label('Alias',     {fontSize: '11px', width: '240px',
-                           fontWeight: 'bold', color: COL.inkSoft,
-                           backgroundColor: COL.page}),
-    ui.Label('Resolves to', {fontSize: '11px', fontWeight: 'bold',
-                             color: COL.inkSoft, backgroundColor: COL.page}),
-  ], ui.Panel.Layout.flow('horizontal'),
-     {margin: '0 0 2px 0', padding: '2px 4px',
-      backgroundColor: COL.page, border: '1px solid ' + COL.grid}));
+  content.add(tableHead([['Alias', '240px'], ['Resolves to']], '0 0 2px 0'));
   Object.keys(DDF.ALIASES).forEach(function(a) {
     content.add(row(a, '→ ' + DDF.ALIASES[a]));
   });
@@ -919,11 +605,168 @@ function renderDDF() {
 
 
 // ====================================================================
-// 3) Exposure datasets — BNPB GIS Assets + GEE Public catalog layers
-//
-// Each row: layer name, Asset path / GEE catalog ID, feature/pixel
-// metadata (count or resolution), and which DIBI / Jitupasna column
-// the data feeds into.
+// 3) PROVINCE_RATIO — BPS Indeks Kemahalan Konstruksi 2025
+// ====================================================================
+function renderProvinceRatio() {
+  var PROV_NAME = {
+    '11': 'ACEH',                    '12': 'SUMATERA UTARA',
+    '13': 'SUMATERA BARAT',          '14': 'RIAU',
+    '15': 'JAMBI',                   '16': 'SUMATERA SELATAN',
+    '17': 'BENGKULU',                '18': 'LAMPUNG',
+    '19': 'KEP. BANGKA BELITUNG',    '21': 'KEP. RIAU',
+    '31': 'DKI JAKARTA (baseline)',  '32': 'JAWA BARAT',
+    '33': 'JAWA TENGAH',             '34': 'DI YOGYAKARTA',
+    '35': 'JAWA TIMUR',              '36': 'BANTEN',
+    '51': 'BALI',                    '52': 'NUSA TENGGARA BARAT',
+    '53': 'NUSA TENGGARA TIMUR',     '61': 'KALIMANTAN BARAT',
+    '62': 'KALIMANTAN TENGAH',       '63': 'KALIMANTAN SELATAN',
+    '64': 'KALIMANTAN TIMUR',        '65': 'KALIMANTAN UTARA',
+    '71': 'SULAWESI UTARA',          '72': 'SULAWESI TENGAH',
+    '73': 'SULAWESI SELATAN',        '74': 'SULAWESI TENGGARA',
+    '75': 'GORONTALO',               '76': 'SULAWESI BARAT',
+    '81': 'MALUKU',                  '82': 'MALUKU UTARA',
+    '91': 'PAPUA BARAT',             '92': 'PAPUA BARAT DAYA',
+    '94': 'PAPUA',                   '95': 'PAPUA SELATAN',
+    '96': 'PAPUA TENGAH',            '97': 'PAPUA PEGUNUNGAN',
+  };
+
+  content.add(head('PROVINCE_RATIO — BPS IKK 2025 (normalized to DKI Jakarta)'));
+  content.add(note('Multiplier for the DKI Jakarta baseline unit_cost. ' +
+    'Higher = more expensive to build. All classes (buildings, roads, ' +
+    'bridges, ...) share this ratio. Applied per-adm2 in 06_damage_calc.js.'));
+
+  // Cheapest first.
+  var codes = Object.keys(UC.PROVINCE_RATIO).sort(function(a, b) {
+    return UC.PROVINCE_RATIO[a] - UC.PROVINCE_RATIO[b];
+  });
+
+  // Bar color mirrors the table: red above ×1.30, green below ×0.85.
+  var chartRows = codes.map(function(code) {
+    var v = UC.PROVINCE_RATIO[code];
+    var barColor = v > 1.30 ? COL.critical
+                 : (v < 0.85 ? COL.good : COL.blue);
+    return [PROV_NAME[code] || code,
+            {v: v, f: '× ' + v.toFixed(3)},
+            barColor];
+  });
+  content.add(ui.Chart(
+    [['Province', 'Ratio × DKI', {role: 'style'}]].concat(chartRows),
+    'BarChart', {
+      height: 70 + codes.length * 15,
+      backgroundColor: COL.surface,
+      legend: {position: 'none'},
+      bar: {groupWidth: '65%'},
+      hAxis: chartAxis({minValue: 0}),
+      vAxis: {textStyle: {color: COL.inkSoft, fontSize: 10}},
+      chartArea: {left: 170, top: 6, right: 24, height: '92%'},
+    }));
+
+  content.add(tableHead([['Code', '48px'], ['Province', '240px'],
+                         ['Ratio × DKI', '100px'], ['vs Aceh (0.85)', '120px']],
+                        '4px 0 2px 0'));
+  codes.forEach(function(code) {
+    var v = UC.PROVINCE_RATIO[code];
+    var name = PROV_NAME[code] || ('(code ' + code + ')');
+    var color = v > 1.30 ? COL.critical : (v < 0.85 ? COL.good : COL.ink);
+    var bold  = v > 1.20 || v < 0.85;
+    var vsAceh = (v / 0.846);
+    content.add(zrow([
+      [code, {width: '48px', color: COL.inkSoft}],
+      [name, {width: '240px', color: '#333333'}],
+      ['× ' + v.toFixed(3), {width: '100px', color: color,
+                             fontWeight: bold ? 'bold' : 'normal'}],
+      ['× ' + vsAceh.toFixed(2), {width: '120px', color: COL.inkSoft}],
+    ]));
+  });
+
+  content.add(head('Coverage'));
+  content.add(row('total provinces',   String(codes.length)));
+  content.add(row('cheapest',          'SULAWESI BARAT (× 0.785)'));
+  content.add(row('most expensive',    'PAPUA PEGUNUNGAN (× 2.109)'));
+  content.add(row('baseline',          'DKI JAKARTA (× 1.000)'));
+  content.add(row('data source',       'BPS IKK 2025 (dataset_inventory.xlsx / Ratio for Construction)'));
+}
+
+
+// ====================================================================
+// 4) CROPS & FISH per m² (from Cost sheet Column G / Crop and vege / Fish)
+// ====================================================================
+function renderCropsFish() {
+  content.add(head('CROPS_PER_M2 — annual production loss (IDR/m²)'));
+  content.add(note('From 2025 BPS: national production × price / harvested area. ' +
+    'Multiply by 10,000 to get IDR/ha.'));
+
+  var cropKeys = Object.keys(UC.CROPS_PER_M2).sort(function(a, b) {
+    return UC.CROPS_PER_M2[b] - UC.CROPS_PER_M2[a];   // desc
+  });
+
+  content.add(ui.Chart(
+    [['Crop', 'IDR / m²']].concat(cropKeys.map(function(k) {
+      var v = UC.CROPS_PER_M2[k];
+      return [k, {v: v, f: v.toLocaleString() + ' IDR/m²'}];
+    })), 'BarChart', {
+      height: 60 + cropKeys.length * 18,
+      colors: [COL.blue],
+      backgroundColor: COL.surface,
+      legend: {position: 'none'},
+      bar: {groupWidth: '62%'},
+      hAxis: chartAxis({minValue: 0, format: 'short'}),
+      vAxis: {textStyle: {color: COL.inkSoft, fontSize: 10}},
+      chartArea: {left: 140, top: 6, right: 24, height: '90%'},
+    }));
+
+  content.add(tableHead([['Crop', '160px'], ['IDR/m²', '100px'],
+                         ['IDR/ha', '160px']], '4px 0 2px 0'));
+  cropKeys.forEach(function(k) {
+    var v = UC.CROPS_PER_M2[k];
+    content.add(zrow([
+      [k, {width: '160px', color: '#333333'}],
+      [v.toLocaleString(), {width: '100px',
+                            color: v > 30000 ? COL.critical : COL.ink,
+                            fontWeight: v > 30000 ? 'bold' : 'normal'}],
+      [idr(v * 10000) + ' / ha', {width: '160px', color: COL.inkSoft}],
+    ]));
+  });
+
+  content.add(head('FISH_PER_M2 — aquaculture per m² (IDR/m²)'));
+  content.add(note('= density (kg/m²) × market price (IDR/kg). ' +
+    '⚠ marks entries flagged "Too Cheap?" in the source spreadsheet.'));
+
+  content.add(tableHead([['Type', '160px'], ['IDR/m²', '120px'],
+                         ['IDR/ha', '160px']], '4px 0 2px 0'));
+  var flagged = {seaweed: true, milkfish: true, tiger_shrimp: true};
+  Object.keys(UC.FISH_PER_M2).forEach(function(k) {
+    var v = UC.FISH_PER_M2[k];
+    var isFlagged = flagged[k];
+    content.add(zrow([
+      [(isFlagged ? '⚠ ' : '') + k,
+       {width: '160px', color: isFlagged ? '#bf6f00' : '#333333'}],
+      [v.toLocaleString(), {width: '120px', color: COL.ink}],
+      [idr(v * 10000) + ' / ha', {width: '160px', color: COL.inkSoft}],
+    ]));
+  });
+
+  content.add(head('INDUSTRY_ALT — alternative per-worker methodologies'));
+  content.add(note('Depreciation of Capital Goods (production loss proxy) and ' +
+    'Business Interruption Loss (per worker per day). Not currently used by ' +
+    '06_damage_calc.js; retained for advanced users.'));
+
+  content.add(head('Depreciation / worker'));
+  ['dep_food_per_worker', 'dep_beverage_per_worker', 'dep_textile_per_worker',
+   'dep_automotive_per_worker', 'dep_metals_per_worker'].forEach(function(k) {
+    content.add(row(k, idr(UC.INDUSTRY_ALT[k])));
+  });
+  content.add(head('Business interruption / worker / day'));
+  ['bil_tobacco_per_worker_day', 'bil_apparel_per_worker_day',
+   'bil_electronics_per_worker_day', 'bil_automotive_per_worker_day'].forEach(function(k) {
+    content.add(row(k, idr(UC.INDUSTRY_ALT[k])));
+  });
+}
+
+
+// ====================================================================
+// 5) EXPOSURE — BNPB GIS Assets + GEE public catalog layers, and the
+//    "Verify every Asset" existence probe
 // ====================================================================
 function renderExposure() {
   content.add(head('Exposure & reference datasets'));
@@ -933,16 +776,16 @@ function renderExposure() {
     '(ministry/agency) and the BIG Ina-Geoportal where all national ' +
     'geospatial data is aggregated: https://tanahair.indonesia.go.id'));
 
-  // (category, items[]) where items = [name, source, meta, dibi_col, notes]
+  // items = [name, source, meta, dibi_col, notes]
   var groups = [
     {
-      title: 'Admin boundaries — BPS (https://gis.bps.go.id/)',
+      title: 'Admin boundaries — BIG (https://geoservices.big.go.id/rbi)',
       items: [
-        ['adm1 (Province)',  C.ASSETS.adm1, '34 prov',  'province_id',
+        ['adm1 (Province)',  C.ASSETS.adm1, '38 prov',  'province_id',
           'aggregation key'],
         ['adm2 (Kab/Kota)',  C.ASSETS.adm2, '514 kab/kota', 'city_id',
-          'main aggregation unit'],
-        ['adm3 (Kecamatan)', C.ASSETS.adm3, '~7,201',   '—',
+          'main aggregation unit; city_id comes from DIBI_PCODE'],
+        ['adm3 (Kecamatan)', C.ASSETS.adm3, '7,287',   '—',
           'finer breakdown (optional)'],
       ],
     },
@@ -961,10 +804,13 @@ function renderExposure() {
           'rice_field / land / forest_impacted',
           'Random-Forest map: 1 Rice · 2 Corn · 3 Sand · 4 Forest · ' +
           '5 City · 6 Water · 7 Palm oil. Drives all land_cover_ha classes.'],
-        ['WorldPop IDN',             C.PUBLIC.worldPop,    '100 m, 2020',
-          'suffered', 'affected population'],
+        ['InaRISK population (BNPB)', C.ASSETS.pop,        '30 m, people/px',
+          'suffered',
+          'affected population. National sum 286.7 M, 1.061x the 2020 ' +
+          'census — a mid-2020s projection; InaRISK states no year. ' +
+          'Replaced WorldPop 2026-10-06.'],
         ['GHSL POP 2020',            C.PUBLIC.ghslPop,     '100 m',
-          '—', 'WorldPop cross-check'],
+          '—', 'population cross-check'],
         ['VIDA buildings (Google+MS)', C.PUBLIC.openBuildings, 'polygons',
           'submerged / house_damaged',
           'building count exposed. Switched 2026-08-19 from Google Open ' +
@@ -1089,68 +935,41 @@ function renderExposure() {
     },
   ];
 
-  // Render: each group as a sub-section with 5-column table
   groups.forEach(function(g) {
     content.add(head(g.title));
-    content.add(ui.Panel([
-      ui.Label('Layer',     {fontSize: '11px', width: '190px',
-                             fontWeight: 'bold', color: COL.inkSoft,
-                             backgroundColor: COL.page}),
-      ui.Label('Count',     {fontSize: '11px', width: '110px',
-                             fontWeight: 'bold', color: COL.inkSoft,
-                             backgroundColor: COL.page}),
-      ui.Label('Feeds DIBI column', {fontSize: '11px', width: '220px',
-                             fontWeight: 'bold', color: COL.inkSoft,
-                             backgroundColor: COL.page}),
-      ui.Label('Notes',     {fontSize: '11px', fontWeight: 'bold',
-                             color: COL.inkSoft, backgroundColor: COL.page}),
-    ], ui.Panel.Layout.flow('horizontal'),
-       {margin: '2px 0', padding: '2px 4px',
-        backgroundColor: COL.page, border: '1px solid ' + COL.grid}));
+    content.add(tableHead([['Layer', '190px'], ['Count', '110px'],
+                           ['Feeds DIBI column', '220px'], ['Notes']],
+                          '2px 0'));
     g.items.forEach(function(it) {
-      var name = it[0], src = it[1], meta = it[2], col = it[3], notes = it[4];
-      // Hide private GEE Asset paths (e.g. "projects/<user>/assets/BNPB/...")
-      // — those are personal storage locations, NOT data-source
-      // attribution. The group title
-      // already shows the canonical K/L producer URL.
-      // Public catalog IDs (COPERNICUS/, ESA/, JRC/, WWF/, GOOGLE/, etc.)
-      // are preserved as they are valid open identifiers.
+      var src = it[1], col = it[3];
+      // Private Asset paths are storage locations, not attribution (the
+      // group title names the producer); public catalog IDs are shown.
       var isPrivateAsset = (typeof src === 'string') &&
         (src.indexOf('projects/') === 0 ||
          src.indexOf('users/')    === 0 ||
          src.indexOf('BNPB/')     === 0);
-      var subLabel = isPrivateAsset ? '' : src;
-
-      // One zebra color per row — the nested nameCell panel AND every label
-      // must carry the SAME background, or they render as white boxes on
-      // the striped row.
-      var bg = zbg();
-      var nameWidgets = [
-        ui.Label(name, {fontSize: '11px', color: COL.ink, margin: '0',
-                        fontWeight: 'bold', backgroundColor: bg})];
-      if (subLabel) {
-        nameWidgets.push(ui.Label(subLabel,
-          {fontSize: '9px', color: COL.muted, margin: '0',
-           fontStyle: 'italic', backgroundColor: bg}));
-      }
-      var nameCell = ui.Panel(nameWidgets, ui.Panel.Layout.flow('vertical'),
-        {margin: '0 6px 0 0', width: '190px', backgroundColor: bg});
-      content.add(ui.Panel([
-        nameCell,
-        ui.Label(meta,  {fontSize: '11px', width: '110px', color: COL.ink,
-                         backgroundColor: bg}),
-        ui.Label(col,   {fontSize: '11px', width: '220px',
-                         color: col === '—' ? COL.muted : COL.critical,
-                         fontWeight: col === '—' ? 'normal' : 'bold',
-                         backgroundColor: bg}),
-        ui.Label(notes, {fontSize: '11px', color: COL.inkSoft,
-                         backgroundColor: bg}),
-      ], ui.Panel.Layout.flow('horizontal'),
-         {margin: '1px 0', padding: '1px 4px', backgroundColor: bg}));
+      content.add(zrow([
+        function(bg) {
+          var nameWidgets = [
+            ui.Label(it[0], {fontSize: '11px', color: COL.ink, margin: '0',
+                             fontWeight: 'bold', backgroundColor: bg})];
+          if (!isPrivateAsset && src) {
+            nameWidgets.push(ui.Label(src,
+              {fontSize: '9px', color: COL.muted, margin: '0',
+               fontStyle: 'italic', backgroundColor: bg}));
+          }
+          return ui.Panel(nameWidgets, ui.Panel.Layout.flow('vertical'),
+            {margin: '0 6px 0 0', width: '190px', backgroundColor: bg});
+        },
+        [it[2], {width: '110px', color: COL.ink}],
+        [col, {width: '220px',
+               color: col === '—' ? COL.muted : COL.critical,
+               fontWeight: col === '—' ? 'normal' : 'bold'}],
+        [it[4], {color: COL.inkSoft}],
+      ], '1px 0'));
     });
   });
 
-  // Coverage summary
   content.add(head('Coverage summary'));
   content.add(row('K/L exposure groups (via BIG)', String(groups.length - 2)));
   content.add(row('Hazard / land-cover raster layers', '8'));
@@ -1162,17 +981,11 @@ function renderExposure() {
     'electricity_network_damaged, road_impacted, ' +
     'rice_field_impacted, land_impacted, plantation_impacted, forest_impacted'));
 
-  // ---- Do these Assets actually exist? ----
-  //
-  // A source Asset that is missing does NOT degrade quietly: the whole run
-  // stops with "Collection.loadTable: Collection asset ... not found", and
-  // it stops inside the damage engine, far from the catalog entry that
-  // caused it. This is the check to run after any Asset is added, renamed
-  // or moved — and before trusting a valuation built on them.
-  //
-  // Probed ASYNCHRONOUSLY (ee.data.getAsset with a callback): 40-odd
-  // synchronous round trips would freeze the page, and the results would
-  // all land at once instead of filling in as they arrive.
+  // ---- Verify every Asset ----
+  // A missing source Asset stops the whole run inside the damage engine
+  // ("Collection.loadTable: ... not found"), far from the catalog entry.
+  // Probed asynchronously (ee.data.getAsset with a callback): 40-odd
+  // synchronous round trips would freeze the page.
   content.add(head('Are these Assets actually there?'));
   content.add(note('One probe per Asset the pipeline names. Nothing is ' +
     'checked until you press the button — the rest of this page stays ' +
@@ -1203,17 +1016,12 @@ function renderExposure() {
     var done = 0, missing = 0;
     _z = 0;
     targets.forEach(function(t) {
-      var bg = zbg();
-      var line = ui.Panel([
-        ui.Label(t.label, {fontSize: '11px', width: '240px',
-                           color: COL.inkSoft, backgroundColor: bg}),
-        ui.Label('checking...', {fontSize: '11px', width: '110px',
-                                 color: COL.muted, backgroundColor: bg}),
-        ui.Label(t.id.split('/').pop(), {fontSize: '10px', color: COL.muted,
-                                         fontStyle: 'italic',
-                                         backgroundColor: bg}),
-      ], ui.Panel.Layout.flow('horizontal'),
-         {margin: '0', padding: '1px 4px', backgroundColor: bg});
+      var line = zrow([
+        [t.label, {width: '240px', color: COL.inkSoft}],
+        ['checking...', {width: '110px', color: COL.muted}],
+        [t.id.split('/').pop(), {fontSize: '10px', color: COL.muted,
+                                 fontStyle: 'italic'}],
+      ]);
       verifyHolder.add(line);
 
       ee.data.getAsset(t.id, function(res, err) {
@@ -1239,220 +1047,8 @@ function renderExposure() {
 
 
 // ====================================================================
-// 5) PROVINCE_RATIO — BPS Indeks Kemahalan Konstruksi 2025
-// ====================================================================
-function renderProvinceRatio() {
-  var PROV_NAME = {
-    '11': 'ACEH',                    '12': 'SUMATERA UTARA',
-    '13': 'SUMATERA BARAT',          '14': 'RIAU',
-    '15': 'JAMBI',                   '16': 'SUMATERA SELATAN',
-    '17': 'BENGKULU',                '18': 'LAMPUNG',
-    '19': 'KEP. BANGKA BELITUNG',    '21': 'KEP. RIAU',
-    '31': 'DKI JAKARTA (baseline)',  '32': 'JAWA BARAT',
-    '33': 'JAWA TENGAH',             '34': 'DI YOGYAKARTA',
-    '35': 'JAWA TIMUR',              '36': 'BANTEN',
-    '51': 'BALI',                    '52': 'NUSA TENGGARA BARAT',
-    '53': 'NUSA TENGGARA TIMUR',     '61': 'KALIMANTAN BARAT',
-    '62': 'KALIMANTAN TENGAH',       '63': 'KALIMANTAN SELATAN',
-    '64': 'KALIMANTAN TIMUR',        '65': 'KALIMANTAN UTARA',
-    '71': 'SULAWESI UTARA',          '72': 'SULAWESI TENGAH',
-    '73': 'SULAWESI SELATAN',        '74': 'SULAWESI TENGGARA',
-    '75': 'GORONTALO',               '76': 'SULAWESI BARAT',
-    '81': 'MALUKU',                  '82': 'MALUKU UTARA',
-    '91': 'PAPUA BARAT',             '92': 'PAPUA BARAT DAYA',
-    '94': 'PAPUA',                   '95': 'PAPUA SELATAN',
-    '96': 'PAPUA TENGAH',            '97': 'PAPUA PEGUNUNGAN',
-  };
-
-  content.add(head('PROVINCE_RATIO — BPS IKK 2025 (normalized to DKI Jakarta)'));
-  content.add(note('Multiplier for the DKI Jakarta baseline unit_cost. ' +
-    'Higher = more expensive to build. All classes (buildings, roads, ' +
-    'bridges, ...) share this ratio. Applied per-adm2 in 06_damage_calc.js.'));
-
-  // sort by ratio ascending (cheapest first)
-  var codes = Object.keys(UC.PROVINCE_RATIO).sort(function(a, b) {
-    return UC.PROVINCE_RATIO[a] - UC.PROVINCE_RATIO[b];
-  });
-
-  // Chart: every province at a glance. Bar color mirrors the table's text
-  // colors — red above ×1.30, green below ×0.85, blue otherwise.
-  var chartRows = codes.map(function(code) {
-    var v = UC.PROVINCE_RATIO[code];
-    var barColor = v > 1.30 ? COL.critical
-                 : (v < 0.85 ? COL.good : COL.blue);
-    return [PROV_NAME[code] || code,
-            {v: v, f: '× ' + v.toFixed(3)},
-            barColor];
-  });
-  content.add(ui.Chart(
-    [['Province', 'Ratio × DKI', {role: 'style'}]].concat(chartRows),
-    'BarChart', {
-      height: 70 + codes.length * 15,
-      backgroundColor: COL.surface,
-      legend: {position: 'none'},
-      bar: {groupWidth: '65%'},
-      hAxis: {minValue: 0,
-              textStyle: {color: COL.muted, fontSize: 10},
-              gridlines: {color: COL.grid},
-              baselineColor: COL.grid},
-      vAxis: {textStyle: {color: COL.inkSoft, fontSize: 10}},
-      chartArea: {left: 170, top: 6, right: 24, height: '92%'},
-    }));
-
-  _z = 0;
-  content.add(ui.Panel([
-    ui.Label('Code',    {fontSize: '11px', width: '48px', fontWeight: 'bold',
-                         color: COL.inkSoft, backgroundColor: COL.page}),
-    ui.Label('Province',{fontSize: '11px', width: '240px', fontWeight: 'bold',
-                         color: COL.inkSoft, backgroundColor: COL.page}),
-    ui.Label('Ratio × DKI', {fontSize: '11px', width: '100px', fontWeight: 'bold',
-                             color: COL.inkSoft, backgroundColor: COL.page}),
-    ui.Label('vs Aceh (0.85)', {fontSize: '11px', width: '120px', fontWeight: 'bold',
-                                color: COL.inkSoft, backgroundColor: COL.page}),
-  ], ui.Panel.Layout.flow('horizontal'),
-     {margin: '4px 0 2px 0', padding: '2px 4px',
-      backgroundColor: COL.page, border: '1px solid ' + COL.grid}));
-  codes.forEach(function(code) {
-    var v = UC.PROVINCE_RATIO[code];
-    var name = PROV_NAME[code] || ('(code ' + code + ')');
-    var color = v > 1.30 ? COL.critical : (v < 0.85 ? COL.good : COL.ink);
-    var bold  = v > 1.20 || v < 0.85;
-    var vsAceh = (v / 0.846);
-    var bg = zbg();
-    content.add(ui.Panel([
-      ui.Label(code, {fontSize: '11px', width: '48px', color: COL.inkSoft,
-                      backgroundColor: bg}),
-      ui.Label(name, {fontSize: '11px', width: '240px', color: '#333333',
-                      backgroundColor: bg}),
-      ui.Label('× ' + v.toFixed(3), {fontSize: '11px', width: '100px',
-        color: color, fontWeight: bold ? 'bold' : 'normal',
-        backgroundColor: bg}),
-      ui.Label('× ' + vsAceh.toFixed(2), {fontSize: '11px', width: '120px',
-        color: COL.inkSoft, backgroundColor: bg}),
-    ], ui.Panel.Layout.flow('horizontal'),
-       {margin: '0', padding: '1px 4px', backgroundColor: bg}));
-  });
-
-  content.add(head('Coverage'));
-  content.add(row('total provinces',   String(codes.length)));
-  content.add(row('cheapest',          'SULAWESI BARAT (× 0.785)'));
-  content.add(row('most expensive',    'PAPUA PEGUNUNGAN (× 2.109)'));
-  content.add(row('baseline',          'DKI JAKARTA (× 1.000)'));
-  content.add(row('data source',       'BPS IKK 2025 (dataset_inventory.xlsx / Ratio for Construction)'));
-}
-
-
-// ====================================================================
-// 6) CROPS & FISH per m² (from Cost sheet Column G / Crop and vege / Fish)
-// ====================================================================
-function renderCropsFish() {
-  content.add(head('CROPS_PER_M2 — annual production loss (IDR/m²)'));
-  content.add(note('From 2025 BPS: national production × price / harvested area. ' +
-    'Multiply by 10,000 to get IDR/ha.'));
-
-  var cropKeys = Object.keys(UC.CROPS_PER_M2).sort(function(a, b) {
-    return UC.CROPS_PER_M2[b] - UC.CROPS_PER_M2[a];   // desc
-  });
-
-  content.add(ui.Chart(
-    [['Crop', 'IDR / m²']].concat(cropKeys.map(function(k) {
-      var v = UC.CROPS_PER_M2[k];
-      return [k, {v: v, f: v.toLocaleString() + ' IDR/m²'}];
-    })), 'BarChart', {
-      height: 60 + cropKeys.length * 18,
-      colors: [COL.blue],
-      backgroundColor: COL.surface,
-      legend: {position: 'none'},
-      bar: {groupWidth: '62%'},
-      hAxis: {minValue: 0, format: 'short',
-              textStyle: {color: COL.muted, fontSize: 10},
-              gridlines: {color: COL.grid},
-              baselineColor: COL.grid},
-      vAxis: {textStyle: {color: COL.inkSoft, fontSize: 10}},
-      chartArea: {left: 140, top: 6, right: 24, height: '90%'},
-    }));
-
-  _z = 0;
-  content.add(ui.Panel([
-    ui.Label('Crop',     {fontSize: '11px', width: '160px', fontWeight: 'bold',
-                          color: COL.inkSoft, backgroundColor: COL.page}),
-    ui.Label('IDR/m²',   {fontSize: '11px', width: '100px', fontWeight: 'bold',
-                          color: COL.inkSoft, backgroundColor: COL.page}),
-    ui.Label('IDR/ha',   {fontSize: '11px', width: '160px', fontWeight: 'bold',
-                          color: COL.inkSoft, backgroundColor: COL.page}),
-  ], ui.Panel.Layout.flow('horizontal'),
-     {margin: '4px 0 2px 0', padding: '2px 4px',
-      backgroundColor: COL.page, border: '1px solid ' + COL.grid}));
-  cropKeys.forEach(function(k) {
-    var v = UC.CROPS_PER_M2[k];
-    var color = v > 30000 ? COL.critical : COL.ink;
-    var bg = zbg();
-    content.add(ui.Panel([
-      ui.Label(k, {fontSize: '11px', width: '160px', color: '#333333',
-                   backgroundColor: bg}),
-      ui.Label(v.toLocaleString(), {fontSize: '11px', width: '100px', color: color,
-        fontWeight: v > 30000 ? 'bold' : 'normal', backgroundColor: bg}),
-      ui.Label(idr(v * 10000) + ' / ha', {fontSize: '11px', width: '160px',
-        color: COL.inkSoft, backgroundColor: bg}),
-    ], ui.Panel.Layout.flow('horizontal'),
-       {margin: '0', padding: '1px 4px', backgroundColor: bg}));
-  });
-
-  content.add(head('FISH_PER_M2 — aquaculture per m² (IDR/m²)'));
-  content.add(note('= density (kg/m²) × market price (IDR/kg). ' +
-    '⚠ marks entries flagged "Too Cheap?" in the source spreadsheet.'));
-
-  _z = 0;
-  content.add(ui.Panel([
-    ui.Label('Type',       {fontSize: '11px', width: '160px', fontWeight: 'bold',
-                            color: COL.inkSoft, backgroundColor: COL.page}),
-    ui.Label('IDR/m²',     {fontSize: '11px', width: '120px', fontWeight: 'bold',
-                            color: COL.inkSoft, backgroundColor: COL.page}),
-    ui.Label('IDR/ha',     {fontSize: '11px', width: '160px', fontWeight: 'bold',
-                            color: COL.inkSoft, backgroundColor: COL.page}),
-  ], ui.Panel.Layout.flow('horizontal'),
-     {margin: '4px 0 2px 0', padding: '2px 4px',
-      backgroundColor: COL.page, border: '1px solid ' + COL.grid}));
-
-  var flagged = {seaweed: true, milkfish: true, tiger_shrimp: true};
-  Object.keys(UC.FISH_PER_M2).forEach(function(k) {
-    var v = UC.FISH_PER_M2[k];
-    var isFlagged = flagged[k];
-    var bg = zbg();
-    content.add(ui.Panel([
-      ui.Label((isFlagged ? '⚠ ' : '') + k,
-        {fontSize: '11px', width: '160px',
-         color: isFlagged ? '#bf6f00' : '#333333', backgroundColor: bg}),
-      ui.Label(v.toLocaleString(), {fontSize: '11px', width: '120px',
-        color: COL.ink, backgroundColor: bg}),
-      ui.Label(idr(v * 10000) + ' / ha',
-        {fontSize: '11px', width: '160px', color: COL.inkSoft,
-         backgroundColor: bg}),
-    ], ui.Panel.Layout.flow('horizontal'),
-       {margin: '0', padding: '1px 4px', backgroundColor: bg}));
-  });
-
-  content.add(head('INDUSTRY_ALT — alternative per-worker methodologies'));
-  content.add(note('Depreciation of Capital Goods (production loss proxy) and ' +
-    'Business Interruption Loss (per worker per day). Not currently used by ' +
-    '06_damage_calc.js; retained for advanced users.'));
-
-  content.add(head('Depreciation / worker'));
-  ['dep_food_per_worker', 'dep_beverage_per_worker', 'dep_textile_per_worker',
-   'dep_automotive_per_worker', 'dep_metals_per_worker'].forEach(function(k) {
-    content.add(row(k, idr(UC.INDUSTRY_ALT[k])));
-  });
-  content.add(head('Business interruption / worker / day'));
-  ['bil_tobacco_per_worker_day', 'bil_apparel_per_worker_day',
-   'bil_electronics_per_worker_day', 'bil_automotive_per_worker_day'].forEach(function(k) {
-    content.add(row(k, idr(UC.INDUSTRY_ALT[k])));
-  });
-}
-
-
-// ====================================================================
-// 6) Sanity test — worked example with the FULL pipeline formula
-//     damage = qty × unit × DDF(depth) × province_ratio
+// 6) SANITY TEST — worked example with the full pipeline formula
+//    damage = qty × unit × DDF(depth) × province_ratio
 // ====================================================================
 function renderSanity() {
   content.add(head('Example: 36 m² house @ 1.5 m flood (DKI Jakarta)'));
@@ -1496,17 +1092,246 @@ function renderSanity() {
       legend: {position: 'none'},
       bar: {groupWidth: '55%'},
       hAxis: {textStyle: {color: COL.muted, fontSize: 10}},
-      vAxis: {title: 'Rp million', minValue: 0,
-              titleTextStyle: {color: COL.muted, italic: false},
-              textStyle: {color: COL.muted, fontSize: 10},
-              gridlines: {color: COL.grid},
-              baselineColor: COL.grid},
+      vAxis: chartAxis({title: 'Rp million', minValue: 0,
+                        titleTextStyle: {color: COL.muted, italic: false}}),
       chartArea: {left: 70, top: 10, right: 16, height: '75%'},
     }));
   DEPTH_STEPS.forEach(function(d) {
     var r = DDF.evaluate('residential', d);
     content.add(row('depth ' + d.toFixed(2) + ' m',
       pct(r) + '   →  ' + idr(base * r)));
+  });
+}
+
+
+// ====================================================================
+// 7) ENGINE TEST — the per-pixel DDF and the separate 100 m population
+//    pass both produce plausible-looking wrong numbers when broken, so
+//    each test fails loudly:
+//      T1  evaluateImage vs evaluate (all curves must agree)
+//      T2  hand calculation (one house)
+//      T3  population scale (catches the 100× resolution trap)
+//      T4  the per-city measurements on a real event
+// ====================================================================
+function renderEngineTest() {
+  function sub(t, size, margin) {
+    return ui.Label(t, {fontSize: size, fontWeight: 'bold', color: '333',
+                        margin: margin});
+  }
+  function hint(t, margin) {
+    return ui.Label(t, {fontSize: '10px', color: '777', margin: margin});
+  }
+  function errLabel(t) {
+    return ui.Label(t, {fontSize: '11px', color: 'c00'});
+  }
+
+  content.add(ui.Label('Engine Test — 2026-08-05 rewrite verification', {
+    fontSize: '14px', fontWeight: 'bold', color: '1a3d6d', margin: '0 0 2px 0',
+  }));
+  content.add(hint(
+    'T1 and T2 run immediately. T4 needs an event id and costs a server call.',
+    '0 0 10px 0'));
+
+  // ---------- T1: image vs scalar DDF ----------
+  content.add(sub('T1 · evaluateImage vs evaluate (all curves)', '12px',
+                  '8px 0 4px 0'));
+  content.add(hint(
+    'Both implementations walk the same control points; a mismatch means the ' +
+    'per-pixel path has drifted from the reference curve.', '0 0 4px 0'));
+
+  var t1Holder = ui.Panel({style: {margin: '0 0 6px 12px'}});
+  content.add(t1Holder);
+
+  var DEPTHS = [0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0];
+  Object.keys(DDF.CURVES).forEach(function(curveKey) {
+    var line = ui.Panel([
+      ui.Label(curveKey, {fontSize: '11px', width: '150px', color: '333'}),
+      ui.Label('checking...', {fontSize: '11px', color: '888'}),
+    ], ui.Panel.Layout.flow('horizontal'), {margin: '0'});
+    t1Holder.add(line);
+
+    // Sample the ratio image at each test depth via a constant depth image.
+    var imgVals = ee.List(DEPTHS.map(function(d) {
+      return DDF.evaluateImage(curveKey, ee.Image.constant(d))
+                .reduceRegion({
+                  reducer: ee.Reducer.first(),
+                  geometry: ee.Geometry.Point([106.8, -6.2]).buffer(30),
+                  scale: 30,
+                }).values().get(0);
+    }));
+
+    imgVals.evaluate(function(vals, err) {
+      if (err || !vals) {
+        line.widgets().get(1).setValue('ERROR ' + err)
+           .style().set('color', 'c00');
+        return;
+      }
+      var worst = 0, worstAt = null;
+      DEPTHS.forEach(function(d, i) {
+        var expected = DDF.evaluate(curveKey, d);
+        var diff = Math.abs((vals[i] === null ? 0 : vals[i]) - expected);
+        if (diff > worst) { worst = diff; worstAt = d; }
+      });
+      var ok = worst < 1e-6;
+      line.widgets().get(1)
+        .setValue(ok ? '✓ match (max diff ' + worst.toExponential(1) + ')'
+                     : '✗ MISMATCH ' + worst.toFixed(4) + ' at ' + worstAt + ' m')
+        .style().set('color', ok ? '060' : 'c00');
+    });
+  });
+
+  // ---------- T2: hand calculation ----------
+  content.add(sub('T2 · hand calculation', '12px', '12px 0 4px 0'));
+  var floor = UC.HOUSING.avg_floor_m2;          // 36 m²
+  var rate  = UC.HOUSING.rb_per_m2;             // 6,230,000 IDR/m²
+  var ratio = DDF.evaluate('residential', 1.5); // 0.50
+  var expect = floor * rate * ratio * 1.00;     // DKI Jakarta, ratio 1.00
+  content.add(ui.Label(
+    floor + ' m² × Rp ' + rate.toLocaleString() + '/m² × DDF(residential, ' +
+    '1.5 m)=' + ratio.toFixed(2) + ' × province_ratio 1.00',
+    {fontSize: '11px', color: '333', margin: '0 0 2px 12px'}));
+  content.add(ui.Label('= Rp ' + Math.round(expect).toLocaleString(), {
+    fontSize: '12px', fontWeight: 'bold', color: '060', margin: '0 0 4px 12px',
+  }));
+  content.add(hint(
+    'Cross-check this against one housing row of a real Jitupasna CSV: ' +
+    'damage_idr ÷ (quantity × unit_cost_idr) must equal that row\'s ddf_ratio.',
+    '0 0 4px 12px'));
+
+  // ---------- T3 + T4: need an event ----------
+  content.add(sub('T3 · population scale   /   T4 · old vs new totals', '12px',
+                  '12px 0 4px 0'));
+  content.add(hint(
+    'T3 is the 9× guard: InaRISK is a 30 m people-per-pixel grid, so ' +
+    'reducing it at 10 m would replicate every value 9 times. Exposed ' +
+    'population must never exceed the districts\' total population. ' +
+    'It checks the gridded path — floods and landslides. An earthquake\'s ' +
+    'published population comes from building counts instead, so this ' +
+    'test does not cover it.', '0 0 4px 0'));
+
+  var evtBox = ui.Textbox({
+    placeholder: 'event id, e.g. jakarta_2025_nov_20260804',
+    style: {width: '320px'},
+  });
+  var runBtn = ui.Button({label: 'Run T3 + T4'});
+  content.add(ui.Panel([evtBox, runBtn],
+    ui.Panel.Layout.flow('horizontal'), {margin: '0 0 6px 0'}));
+
+  var resHolder = ui.Panel({style: {margin: '0 0 6px 12px'}});
+  content.add(resHolder);
+
+  runBtn.onClick(function() {
+    var evt = evtBox.getValue();
+    resHolder.clear();
+    if (!evt) {
+      resHolder.add(errLabel('Enter an event id first.'));
+      return;
+    }
+    resHolder.add(ui.Label('Running (one server call)...',
+      {fontSize: '11px', color: '888'}));
+
+    var DMG = require('users/kurihara-yt/dibi:01_shared/06_damage_calc');
+    var CLS = require('users/kurihara-yt/dibi:01_shared/04_damage_classes');
+
+    var fc, totalPop;
+    try {
+      // The overview, not the full valuation: same population arithmetic,
+      // but it stays inside the five-minute interactive limit on a
+      // province-scale event.
+      fc = DMG.computeOverviewFC(evt);
+
+      // Total population of the affected districts — the ceiling for T3.
+      var mask  = C.floodExtentImage(evt).gt(0).selfMask();   // observed OR inferred
+      var adm2  = ee.FeatureCollection(C.ASSETS.adm2).filterBounds(mask.geometry());
+      // InaRISK is one national image, so there is no collection to filter
+      // and the projection comes straight off it. unmask(0) matches what
+      // 06_damage_calc.js sums, so the ceiling is on the same footing.
+      var popImg  = ee.Image(CLS.POPULATION.asset);
+      var popProj = popImg.projection();
+      totalPop = popImg.unmask(0).reduceRegions({
+        collection: adm2, reducer: ee.Reducer.sum().setOutputs(['pop']),
+        scale: popProj.nominalScale(), tileScale: 8,
+      }).aggregate_sum('pop');
+    } catch (e) {
+      resHolder.clear();
+      resHolder.add(errLabel('Pipeline error: ' + e));
+      return;
+    }
+
+    ee.Dictionary({rows: fc, totalPop: totalPop}).evaluate(function(res, err) {
+      resHolder.clear();
+      if (err || !res) {
+        resHolder.add(errLabel('Failed: ' + err));
+        return;
+      }
+
+      // The overview is one row per city with plain measurement properties.
+      var popExposed = 0, floodHa = 0;
+      var cities = [];
+      res.rows.features.forEach(function(f) {
+        var p = f.properties;
+        if (!(p.flood_ha > 0)) return;
+        popExposed += (p.pop_exposed || 0);
+        floodHa    += (p.flood_ha    || 0);
+        cities.push(p);
+      });
+      cities.sort(function(a, b) {
+        return (b.pop_exposed || 0) - (a.pop_exposed || 0);
+      });
+
+      // ---- T3 verdict ----
+      var ceiling = res.totalPop || 0;
+      var t3ok = (ceiling > 0) && (popExposed <= ceiling);
+      resHolder.add(sub('T3 · population scale', '11px', '0 0 2px 0'));
+      resHolder.add(ui.Label(
+        'in the flood ' + Math.round(popExposed).toLocaleString() +
+        '   /   districts total ' + Math.round(ceiling).toLocaleString() +
+        '   =   ' +
+        (ceiling > 0 ? (100 * popExposed / ceiling).toFixed(1) : '?') + ' %',
+        {fontSize: '11px', color: '333', margin: '0 0 2px 12px'}));
+      resHolder.add(ui.Label(
+        t3ok ? '✓ within the district population'
+             : '✗ EXCEEDS the district population. The population raster is ' +
+               '~92.8 m; if it is being reduced on a 10 m grid every value is ' +
+               'counted 100 times. A ratio near 100x means exactly that.',
+        {fontSize: '11px', color: t3ok ? '060' : 'c00',
+         fontWeight: 'bold', margin: '0 0 8px 12px'}));
+
+      // ---- T4: the measurements themselves ----
+      resHolder.add(sub('T4 · what was measured, by city', '11px', '0 0 2px 0'));
+      resHolder.add(hint(
+        'Sanity-check the inputs before trusting any valuation built on them: ' +
+        'a flooded area larger than the city, or a mean depth of tens of ' +
+        'metres, means the problem is upstream in Step 1, not in the costs.',
+        '0 0 4px 12px'));
+
+      cities.slice(0, 15).forEach(function(c) {
+        resHolder.add(ui.Panel([
+          ui.Label(c.city_name, {fontSize: '10px', width: '150px', color: '333'}),
+          ui.Label(Math.round(c.pop_exposed).toLocaleString() + ' people',
+                   {fontSize: '10px', width: '110px', color: '333'}),
+          ui.Label(Math.round(c.flood_ha).toLocaleString() + ' ha',
+                   {fontSize: '10px', width: '90px', color: '333'}),
+          ui.Label((c.depth_mean_m || 0).toFixed(2) + ' m',
+                   {fontSize: '10px', color: '777'}),
+        ], ui.Panel.Layout.flow('horizontal'), {margin: '0 0 0 12px'}));
+      });
+      if (cities.length > 15) {
+        resHolder.add(ui.Label('and ' + (cities.length - 15) + ' more.',
+          {fontSize: '10px', color: '888', margin: '0 0 0 12px'}));
+      }
+
+      resHolder.add(ui.Label(
+        'Total: ' + Math.round(floodHa).toLocaleString() + ' ha under water ' +
+        'across ' + cities.length + ' cities.', {
+        fontSize: '12px', fontWeight: 'bold', color: '060',
+        margin: '6px 0 0 12px'}));
+      resHolder.add(hint(
+        'Per-class damage totals are no longer checked here: valuing a whole ' +
+        'province cannot finish inside the interactive time limit. Check them ' +
+        'by clicking a city in Step 2, or in the saved CSV.',
+        '4px 0 0 12px'));
+    });
   });
 }
 

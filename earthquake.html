@@ -76,21 +76,23 @@ deliberately binary — collapsed / not collapsed, no intermediate grade.
 <table>
   <thead><tr><th>Operating point</th><th>T<sub>sar</sub></th><th>T<sub>opt</sub></th><th>Precision</th><th>Recall</th><th>Use case</th></tr></thead>
   <tbody>
-  <tr><td><b>F2</b> (default)</td><td>5.8</td><td>4.5</td><td>0.48</td><td>0.81</td><td>Early response — a missed collapsed building costs more than a false alarm</td></tr>
-  <tr><td><b>F1</b></td><td>10.9</td><td>5.5</td><td>0.67</td><td>0.66</td><td>Balanced reporting</td></tr>
+  <tr><td><b>F2</b> (default)</td><td>14.4</td><td>7.0</td><td>0.24</td><td>0.62</td><td>Early response — a missed collapsed building costs more than a false alarm</td></tr>
+  <tr><td><b>F1</b></td><td>15.0</td><td>8.1</td><td>0.29</td><td>0.52</td><td>Balanced reporting</td></tr>
   </tbody>
 </table>
 
 <p>
-Both points were calibrated by a full threshold sweep against the
-2023 Kahramanmaraş earthquake (Copernicus EMSR648, 4,619 graded buildings).
+Both points were calibrated by a full threshold sweep against the 2018 Palu
+earthquake (Copernicus EMS EMSR317: 68,722 graded buildings in the four
+fully-inventoried areas, 2,324 destroyed or damaged). Frozen on 2026-08-31.
 </p>
 
 <div class="note">
-<strong>Calibration caveat:</strong> the thresholds are tuned on Turkish
-building stock and have not yet been re-calibrated for Indonesian
-construction. Treat absolute counts with care until Indonesian ground truth
-is incorporated.
+<strong>What the detector sees:</strong> buildings graded <em>destroyed</em>
+are recovered at about 0.7 (0.85 where cloud-free optical data exist);
+buildings graded <em>damaged</em> (partial damage, roof intact) are mostly
+not separable from intact ones at 10 m. Read the counts as
+<em>collapsed buildings</em>, not as all damaged houses.
 </div>
 
 <h2>Sensor modes</h2>
@@ -130,7 +132,7 @@ not in the detector.
 <ul>
   <li>Ballinger, O. — Pixel-Wise T-Test (PWTT) building damage assessment
       (<a href="https://oballinger.github.io/PWTT/">project site</a>).</li>
-  <li>Copernicus EMS EMSR648 — Kahramanmaraş earthquake grading dataset
+  <li>Copernicus EMS EMSR317 — Palu (Sulawesi) 2018 grading dataset
       (calibration ground truth).</li>
 </ul>
 

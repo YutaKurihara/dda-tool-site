@@ -46,9 +46,9 @@ nothing. The full source is embedded below.
   <tr><td>Unit Costs</td><td>The 100 %-damage reconstruction cost of every class, tagged with provenance: <code>[G]</code> statistics-based, <code>[E]</code> recovery-budget request, <code>[Furukawa]</code> expert proposal — traceable to <code>dataset_inventory.xlsx</code> and the government source PDFs.</td></tr>
   <tr><td>DDF Curves</td><td>All 13 depth–damage functions (JRC Huizinga 2017, Asia set) plotted from their control points.</td></tr>
   <tr><td>Province Ratio</td><td>The BPS IKK 2025 construction-cost index per province (DKI Jakarta = 1.00).</td></tr>
-  <tr><td>Exposure</td><td>The 38 exposure assets with feature counts, so missing or stale layers are caught before an event.</td></tr>
+  <tr><td>Exposure</td><td>The 38 exposure assets with their producing ministry, feature counts and DIBI column, plus the reference datasets — BIG boundaries (province to village), the 2025 land cover, the BNPB InaRISK population raster. <b>Verify every Asset</b> probes all 44 source Assets and reports each as present or NOT FOUND.</td></tr>
   <tr><td>Sanity Test</td><td>A worked example — one house in Jakarta flooded to 1.5 m — computed live, verifiable by hand.</td></tr>
-  <tr><td>Engine Test</td><td>Pixel-wise vs. scalar DDF agreement, a hand-calculated damage case, the WorldPop scale test (guards against a ×100 population bug), and old-vs-new engine totals.</td></tr>
+  <tr><td>Engine Test</td><td>Pixel-wise vs. scalar DDF agreement, a hand-calculated damage case, the population scale test (InaRISK is a 30 m people-per-pixel grid; reducing it at 10 m would inflate population nine-fold), and old-vs-new engine totals.</td></tr>
   </tbody>
 </table>
 

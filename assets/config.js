@@ -17,6 +17,8 @@ window.DDA_APPS = {
   dashboard: "https://ee-kurihara-yt.projects.earthengine.app/view/dashboard",
   datacheck: "https://ee-kurihara-yt.projects.earthengine.app/view/datacheck",
   forestfire: "https://ee-kurihara-yt.projects.earthengine.app/view/forestfire",
+  // The drought key was removed on 2026-10-17: 03_dashboard/03_drought.js is
+  // no longer part of the tool and its page is not published.
 };
 
 /* Injects the iframe (or a placeholder card) into #app-slot. */
