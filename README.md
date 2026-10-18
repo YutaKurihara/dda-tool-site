@@ -17,6 +17,7 @@ GEE App 埋め込み + 手法解説の静的サイト。ビルド不要の素の
 | `code/07_datacheck.js` | datacheck.html が fetch するコードのコピー。**01_shared 側を更新したら再コピーすること** |
 | `assets/config.js` | **GEE App の URL を設定する唯一のファイル**(dashboard / datacheck / forestfire) |
 | `assets/style.css` | 共通スタイル(PWTT/Quarto 風・学術ドキュメント調) |
+| `assets/img/manual/` | Manual の操作画面 16 枚(2026-10-18 撮影、赤枠と番号は scratchpad の manual_shots.py で付与。原本は Pictures/Screenshots) |
 
 2026-10-17 の全面再構成(外部レビュー「サイト全体を確認.pdf」対応): 全ページを
 「何ができるか → 提供物 → How it works → 精度と限界 → 出力 → Technical details」の順に並べ替え、

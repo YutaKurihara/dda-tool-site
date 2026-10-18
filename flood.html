@@ -101,7 +101,9 @@ flood when the water surface says it must be there.
   <li>Some flooded areas are inferred from terrain rather than directly
       detected by the satellite.</li>
   <li>Water depth is estimated using elevation data and may differ from
-      actual floodwater depth.</li>
+      actual floodwater depth. It has not yet been validated against measured
+      water levels; read it as an indication of relative depth rather than a
+      measurement.</li>
   <li>Flood maps represent conditions around the satellite observation dates,
       not necessarily the maximum flood extent.</li>
   <li>Damage estimates are preliminary direct-damage estimates and should be
@@ -113,7 +115,7 @@ flood when the water surface says it must be there.
 <table>
   <thead><tr><th>Asset</th><th>Content</th></tr></thead>
   <tbody>
-  <tr><td><code>floodmask_&lt;event_id&gt;</code></td><td><b>Observed</b> flood extent, binary, 10&nbsp;m. Sentinel-1 only — the light task, and it lands first.</td></tr>
+  <tr><td><code>floodmask_&lt;event_id&gt;</code></td><td><b>Observed</b> flood extent, binary, 10&nbsp;m. Sentinel-1 only — a smaller export task that normally completes before the depth calculation.</td></tr>
   <tr><td><code>flooddepth_&lt;event_id&gt;</code></td><td>30&nbsp;m, two bands: <code>depth_m</code> (metres, masked where there is no valid boundary) and <code>depth_flag</code> (1 observed with a valid boundary · 2 inferred · 3 no valid boundary).</td></tr>
   </tbody>
 </table>

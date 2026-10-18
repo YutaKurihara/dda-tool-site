@@ -37,8 +37,25 @@ lives on its own page — <a href="flood.html">Flood</a>,
 </p>
 </div>
 
+<nav class="toc" aria-label="Contents">
+<b>Contents</b>
+<ol>
+  <li><a href="#sec-1">Overview</a></li>
+  <li><a href="#sec-2">Quick Start</a></li>
+  <li><a href="#sec-3">Requirements</a></li>
+  <li><a href="#sec-4">Step 1 — Detect the disaster</a></li>
+  <li><a href="#sec-5">Step 2 — Estimate damage</a></li>
+  <li><a href="#sec-6">Step 3 — Review and export</a></li>
+  <li><a href="#sec-7">Data verification</a></li>
+  <li><a href="#sec-8">Troubleshooting</a></li>
+  <li><a href="#appendix-a">Appendix A · The scripts</a></li>
+  <li><a href="#appendix-b">Appendix B · Assets and naming</a></li>
+  <li><a href="#appendix-c">Appendix C · What the engine computes</a></li>
+</ol>
+</nav>
+
 <!-- ================================================================ -->
-<h2>1 · Overview</h2>
+<h2 id="sec-1">1 · Overview</h2>
 
 <p>
 The tool supports flood, landslide and earthquake damage assessment. Separate
@@ -86,19 +103,14 @@ cannot be observed from satellite and are left blank.
 </div>
 
 <!-- ================================================================ -->
-<h2>2 · Quick Start</h2>
-
-<div class="note warn">
-<strong>Important: creating an export task does not start the
-calculation.</strong> Each task must be started from the Earth Engine Tasks
-tab by pressing RUN. This is the step people forget, at every stage.
-</div>
+<h2 id="sec-2">2 · Quick Start</h2>
 
 <div class="tiles">
   <div class="tile"><b>Step 1 — Detect the disaster</b>
     <ol>
       <li>Open the detection script for the hazard.</li>
-      <li>Select the disaster date and the affected area.</li>
+      <li>Select the disaster date and the affected area (the Event ID is
+          named automatically from them).</li>
       <li>Review the preview map.</li>
       <li>Press Export.</li>
       <li>Open the Tasks tab and RUN the export tasks.</li>
@@ -124,6 +136,11 @@ tab by pressing RUN. This is the step people forget, at every stage.
     </ol></div>
 </div>
 
+<figure class="shot narrow">
+  <img src="assets/img/manual/01-scripts.png" alt="The DDA Tool repository in the Scripts tab" loading="lazy">
+  <figcaption><b>Figure 1.</b> The repository as it appears in the Scripts tab. ① <code>01_shared</code> is library code — never run it directly. ② <code>02_event</code> holds the Stage&nbsp;1 detectors and the Stage&nbsp;2 damage calculation. ③ <code>03_dashboard</code> holds the viewer and the active fire monitor.</figcaption>
+</figure>
+
 <h3>Who can do what</h3>
 
 <table>
@@ -140,7 +157,7 @@ tab by pressing RUN. This is the step people forget, at every stage.
 </table>
 
 <!-- ================================================================ -->
-<h2>3 · Requirements</h2>
+<h2 id="sec-3">3 · Requirements</h2>
 
 <ul>
   <li><b>An Earth Engine account</b> with access to the Cloud project that
@@ -157,6 +174,11 @@ tab by pressing RUN. This is the step people forget, at every stage.
       Editor.</li>
 </ul>
 
+<figure class="shot">
+  <img src="assets/img/manual/02-code-editor.jpg" alt="The Earth Engine Code Editor" loading="lazy">
+  <figcaption><b>Figure 2.</b> The Earth Engine Code Editor. ① The Scripts tab lists the DDA Tool repository with its three folders. ② A script opens in the centre; Run executes it and its panel appears beside the map. ③ Console shows messages; <b>Tasks</b> is where every export is started.</figcaption>
+</figure>
+
 <div class="note">
 <strong>Two clocks to keep in mind.</strong> Anything computed <em>on screen</em>
 is killed by Earth Engine after about five minutes, on every billing plan.
@@ -167,7 +189,7 @@ multi-hour batch task — start it and come back.
 </div>
 
 <!-- ================================================================ -->
-<h2>4 · Step 1 — Detect the disaster</h2>
+<h2 id="sec-4">4 · Step 1 — Detect the disaster</h2>
 
 <p>
 Open the script for the hazard you are assessing. The detectors share the
@@ -176,13 +198,17 @@ and those are documented on the hazard pages.
 </p>
 
 <ol>
-  <li><b>Event ID.</b> A short slug, e.g. <code>jakarta_2025_nov</code>. The
-      script adds the hazard prefix and the export date for you, so what
-      actually gets written is
-      <code>flood_jakarta_2025_nov_20260824</code>. That full string is the
-      <em>event id</em> and it is the key every later stage uses. The date
-      stamp means re-running the same event on a later day never collides
-      with the earlier result.</li>
+  <li><b>Event ID.</b> Filled in automatically from the area and the date
+      you select — <code>&lt;place&gt;_&lt;yyyymmdd&gt;</code>, e.g.
+      <code>aceh_tamiang_20250915</code> for a kabupaten,
+      <code>aceh_20250915</code> for a whole province, <code>aoi_…</code> for a
+      drawn polygon. It updates whenever you change the area or the date, and
+      you may overwrite it by hand (after which it stops updating). On export
+      the script adds the hazard prefix and the export date, so what actually
+      gets written is <code>flood_aceh_tamiang_20250915_20261018</code>. That
+      full string is the <em>event id</em> and it is the key every later stage
+      uses. The date stamp means re-running the same event on a later day
+      never collides with the earlier result.</li>
   <li><b>Area of interest.</b> Three ways: pick a province and a
       kabupaten/kota; pick a province and "(Whole province)"; or leave the
       province blank and draw a polygon on the map.</li>
@@ -201,6 +227,26 @@ and those are documented on the hazard pages.
       province-wide flood start the depth task first: it is the long one, and
       Earth Engine runs about two tasks at a time.</li>
 </ol>
+
+<figure class="shot">
+  <img src="assets/img/manual/03-flood-panel.jpg" alt="Stage 1 panel of the flood detector" loading="lazy">
+  <figcaption><b>Figure 3.</b> Stage&nbsp;1 panel of the flood detector. ① The Event ID is filled in automatically from the area and the date, and can be edited. ② Enter the flood date; the before and after windows are derived from it. ③ Choose a province and a city/regency, or leave the province blank and draw a polygon on the map.</figcaption>
+</figure>
+
+<figure class="shot">
+  <img src="assets/img/manual/04-flood-preview.jpg" alt="Province-wide preview for Aceh" loading="lazy">
+  <figcaption><b>Figure 4.</b> A province-wide preview for Aceh. ① Province Aceh, (Whole province). ② Preview draws the result on a coarse grid. ③ The status line reports the flood area and the inputs used; a province-wide preview is indicative only — the export is the real thing. ④ The depth legend; depth is drawn only where the preview could estimate it.</figcaption>
+</figure>
+
+<figure class="shot">
+  <img src="assets/img/manual/05-flood-export.jpg" alt="Queuing the exports and running the tasks" loading="lazy">
+  <figcaption><b>Figure 5.</b> Queuing the exports. ① <b>Export both Assets</b> queues the extent and the depth tasks. ② The status line names the event id that will be written. ③ Open the <b>Tasks</b> tab. ④ Press <b>RUN</b> on each unsubmitted task — nothing is computed until you do. For a province-wide flood start the depth task first.</figcaption>
+</figure>
+
+<figure class="shot">
+  <img src="assets/img/manual/06-flood-assets.jpg" alt="Completed task and the new Assets" loading="lazy">
+  <figcaption><b>Figure 6.</b> Checking the result. ① The Assets tab. ② New Assets appear under <code>BNPB/events</code> once a task has completed. ③ A finished task shows <em>Phase: Completed</em> with its runtime; this province-wide extent took two hours.</figcaption>
+</figure>
 
 <h3>What each detector writes</h3>
 
@@ -227,8 +273,9 @@ and those are documented on the hazard pages.
 For floods the reported extent is the observed flood <em>plus</em> the pixels
 the depth model infers to be flooded — terrain below the water surface inside
 areas the radar could not decide (see <a href="flood.html#classes">Flood</a>).
-That union is made when the Assets are <em>read</em>, so the mask task stays a
-light Sentinel-1 job and lands first. Until the depth task has landed, the
+That union is made when the Assets are <em>read</em>, so the mask export is a
+smaller Sentinel-1-only task that normally completes before the depth
+calculation. Until the depth task has landed, the
 dashboard shows the observed extent and flags <em>DEPTH PENDING</em>;
 <b>run Stage&nbsp;2 only once both Assets exist</b>, or the valuation will
 cover the observed extent alone.
@@ -250,7 +297,7 @@ confirmed closure; ground confirmation remains the operator's job.
 </p>
 
 <!-- ================================================================ -->
-<h2>5 · Step 2 — Estimate damage</h2>
+<h2 id="sec-5">5 · Step 2 — Estimate damage</h2>
 
 <p>
 Open <code>02_event/04_damage_calculation.js</code>.
@@ -270,6 +317,22 @@ Open <code>02_event/04_damage_calculation.js</code>.
       province can take hours. When the task is done, press "Refresh the list"
       and select the event again — the numbers appear.</li>
 </ol>
+
+<figure class="shot">
+  <img src="assets/img/manual/07-stage2-select.jpg" alt="Stage 2 event list" loading="lazy">
+  <figcaption><b>Figure 7.</b> Stage&nbsp;2 — choose the event. ① <b>Refresh the list</b> shows every event whose Stage&nbsp;1 Assets have landed (floods need both the extent and the depth). ② The event ids carry the hazard prefix and the export date.</figcaption>
+</figure>
+
+<figure class="shot">
+  <img src="assets/img/manual/08-stage2-map.jpg" alt="Stage 2 with a valued event loaded" loading="lazy">
+  <figcaption><b>Figure 8.</b> An event that was already valued. ① The selected event. ② <b>Refresh the list</b> after a task finishes. ③ <b>Value everything and store the result</b> queues the province-wide valuation. ④ Cities shaded by people affected; click a city for its stored damage.</figcaption>
+</figure>
+
+<figure class="shot">
+  <img src="assets/img/manual/09-stage2-tasks.jpg" alt="Starting the valuation task" loading="lazy">
+  <figcaption><b>Figure 9.</b> Starting the valuation. ① The status line confirms that one job was queued. ② The button that queued it. ③ The <code>damage_value</code> task waits in the Tasks tab until you press <b>RUN</b>; a province takes hours.</figcaption>
+</figure>
+
 
 <table>
   <thead><tr><th>Asset</th><th>Contents</th></tr></thead>
@@ -303,7 +366,7 @@ population indicator and housing floor area.
 </div>
 
 <!-- ================================================================ -->
-<h2>6 · Step 3 — Review and export</h2>
+<h2 id="sec-6">6 · Step 3 — Review and export</h2>
 
 <p>
 Open <code>03_dashboard/01_dashboard.js</code>, or the published dashboard. It
@@ -323,10 +386,11 @@ in seconds however large the event was.
   <li><b>Charts</b> — damage by sector, top damage classes, top districts.</li>
   <li><b>Map</b> — hazard extent, per-district damage choropleth, flood depth
       (floods only), exposure overlays, the × potential-road-blockage markers
-      where a <code>roadblock_</code> Asset exists, district names drawn on
-      the map, and a <em>Village boundaries</em> layer (off by default —
-      83,000 villages nationally, drawn for the event area only). Clicking a
-      district also reports the village under the cursor.</li>
+      where a <code>roadblock_</code> Asset exists, a <em>City names</em>
+      layer and a <em>Village boundaries</em> layer (both off by default —
+      switch them on in the layer list; the village layer is drawn for the
+      event area only, 83,000 villages nationally). Clicking a district also
+      reports the village under the cursor.</li>
   <li><b>Click any district</b> to re-scope the class-totals table to it.
       "← All cities" returns to the event-wide view.</li>
   <li><b>Badges.</b> <em>DEPTH PENDING</em> (flood depth not yet available —
@@ -334,6 +398,16 @@ in seconds however large the event was.
       not yet available — all detections shown) mean the event is not ready
       for Stage&nbsp;2.</li>
 </ul>
+
+<figure class="shot">
+  <img src="assets/img/manual/10-dashboard.jpg" alt="The dashboard with the Aceh flood loaded" loading="lazy">
+  <figcaption><b>Figure 10.</b> The dashboard with the Aceh flood loaded. ① The event selector and the hazard badge. ② The KPI row — total estimated direct damage, districts, people, houses, area, hardest-hit city. ③ Refresh, the CSV exports and their download links.</figcaption>
+</figure>
+
+<figure class="shot">
+  <img src="assets/img/manual/11-dashboard-charts.jpg" alt="Charts and class totals" loading="lazy">
+  <figcaption><b>Figure 11.</b> Reviewing the results. ① Damage by sector. ② Top damage classes in rupiah. ③ Class totals — every class with its estimated direct damage and quantity; click a city on the map to filter it. ④ Cities shaded by total damage, with the legend classes.</figcaption>
+</figure>
 
 <h3>6.2 The two CSVs</h3>
 
@@ -362,6 +436,22 @@ downloads, not Tasks, so they also work from the published app. They are
 preliminary assessment tables formatted to support DIBI and Jitupasna
 reporting, not complete official reports.
 </p>
+
+<div class="note">
+<strong>One money column.</strong> The published Data Bencana format has a
+single monetary field, <code>kerugian_juta</code> (literally "loss", in
+millions of rupiah), and no separate field for physical damage. The tool
+writes its estimated direct physical damage there because the format offers
+nowhere else; the figure is <em>not</em> an estimate of economic loss. The
+Jitupasna CSV keeps the distinction explicit — every row is tagged
+<code>jitupasna_component = Kerusakan</code>. Agree with BNPB how this column
+is to be read before the tables are used in official reporting.
+</div>
+
+<figure class="shot narrow">
+  <img src="assets/img/manual/12-csv-buttons.png" alt="CSV export buttons" loading="lazy">
+  <figcaption><b>Figure 12.</b> The CSV buttons in the dashboard header. ① <b>Export DIBI CSV</b> builds the Data Bencana table. ② <b>Export Jitupasna CSV</b> builds the long-format table. ③ The download links appear when the file is ready, with the row count.</figcaption>
+</figure>
 
 <h3>6.3 GIS download — the hazard extent and the exposed features</h3>
 
@@ -397,6 +487,11 @@ layer is read from <code>affectedbld_&lt;id&gt;</code> when Stage 2 has
 produced it. Batch exports have no size limit, but this is Code&nbsp;Editor
 only.
 </p>
+
+<figure class="shot narrow">
+  <img src="assets/img/manual/13-gis-export.png" alt="GIS export and Asset sharing panel" loading="lazy">
+  <figcaption><b>Figure 13.</b> Exporting GIS data and sharing Assets (right column of the dashboard, Code Editor only). ① Choose the hazard polygons and/or the exposed features. ② Pick the vectorisation grid and the file format, then <b>Queue Drive exports</b> and RUN the tasks. ③ <b>Share BNPB assets</b> makes the Assets readable by the published app — press once to count, again to publish.</figcaption>
+</figure>
 
 <h3>6.4 Publishing the Assets — the sharing button</h3>
 
@@ -434,7 +529,10 @@ the Assets — the app hides it from visitors, who could not use it anyway).
 <p>
 Run it after every round of exports. Already-public Assets are never
 rewritten, and the owner plus any individual reader you granted are carried
-through untouched. Folders are published too — a private folder cannot be
+through untouched. Note that the button publishes the whole BNPB tree — input
+layers as well as event outputs; a results-only option does not exist yet. If
+an input layer must stay private, do not use the button and share the event
+Assets individually from the Assets tab. Folders are published too — a private folder cannot be
 listed by anyone else, so publishing its contents while leaving the directory
 shut would be half a job.
 </p>
@@ -449,7 +547,7 @@ with that licence; commercial use is not. Say so wherever you link the data.
 </div>
 
 <!-- ================================================================ -->
-<h2>7 · Data verification</h2>
+<h2 id="sec-7">7 · Data verification</h2>
 
 <p>
 The <a href="datacheck.html">Data Check</a> screen
@@ -479,6 +577,21 @@ computation, so it opens instantly.
       grid would count every person nine times.</li>
 </ul>
 
+<figure class="shot narrow">
+  <img src="assets/img/manual/14-datacheck-menu.png" alt="Sections of Data Check" loading="lazy">
+  <figcaption><b>Figure 14.</b> The sections of Data Check. ① <b>Exposure</b> lists every exposure layer and holds <b>Verify every Asset</b>. ② <b>Engine Test</b> runs the consistency checks of the damage engine.</figcaption>
+</figure>
+
+<figure class="shot">
+  <img src="assets/img/manual/15-datacheck-unitcosts.jpg" alt="Data Check, Unit Costs" loading="lazy">
+  <figcaption><b>Figure 15.</b> Data Check — Unit Costs. ① The Section selector switches between the checks. ② Summary tiles: unit-cost entries, curves, provinces, crop values and the cost baseline. ③ Every unit cost with its value and its source reference.</figcaption>
+</figure>
+
+<figure class="shot">
+  <img src="assets/img/manual/16-datacheck-engine.jpg" alt="Data Check, Engine Test" loading="lazy">
+  <figcaption><b>Figure 16.</b> Data Check — Engine Test. ① Select <em>Engine Test</em>. ② T1 compares the per-pixel damage-curve evaluation with the reference implementation for every curve; each line should read <em>match</em>.</figcaption>
+</figure>
+
 <p>
 Passing these checks confirms that the datasets are present and that the
 calculations behave as expected. It does not guarantee that every input is
@@ -487,7 +600,7 @@ limitations before an official use.
 </p>
 
 <!-- ================================================================ -->
-<h2>8 · Troubleshooting</h2>
+<h2 id="sec-8">8 · Troubleshooting</h2>
 
 <table>
   <thead><tr><th>Problem</th><th>Possible cause</th><th>What to do</th></tr></thead>
