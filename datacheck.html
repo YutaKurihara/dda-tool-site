@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Data Check — DDA Tool</title>
+<title>Data Quality and Damage Estimation Verification — DDA Tool</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=Source+Sans+3:wght@400;600&display=swap">
 <link rel="stylesheet" href="assets/style.css">
@@ -26,25 +26,54 @@
   <div class="app-frame-wrap" id="app-slot"></div>
 </main>
 
-<main class="page" style="max-width:56rem">
+<main class="page after-app" style="max-width:56rem">
 
 <div class="title-block">
-<h1>Data Check — the audit script</h1>
+<p class="subtitle">Data Check · inputs · assumptions · validation</p>
+<h1>Data Quality and Damage Estimation Verification</h1>
 <p class="lead">
-A damage estimate is only as credible as its inputs. The inspector above
-(<code>07_datacheck.js</code>) lays out every unit cost, damage curve and
-threshold — with its source — and regression-tests the valuation engine.
-It reads constants and assets only, performs no batch computation and writes
-nothing. The full source is embedded below.
+This page explains how the DDA Tool checks the data and calculation methods
+used to estimate disaster damage. Damage estimates depend on the quality of
+the input data, unit costs and assumptions used in the calculation. The Data
+Check screen above helps users review these inputs, identify missing data and
+verify the damage calculation process. It reads constants and Assets only,
+performs no batch computation and writes nothing.
 </p>
 </div>
 
-<h2>What the script checks</h2>
+<h2>What can be checked</h2>
+
+<ul>
+  <li><b>Exposure data</b> — buildings, infrastructure, agricultural land and
+      other assets used in damage assessment, with the producing ministry and
+      the feature counts.</li>
+  <li><b>Unit costs</b> — replacement costs at 100&nbsp;% damage and their
+      original sources.</li>
+  <li><b>Damage functions</b> — the relationships used to estimate damage
+      from flood depth.</li>
+  <li><b>Regional adjustments</b> — differences in construction costs across
+      provinces.</li>
+  <li><b>Data availability</b> — whether every required dataset is present.</li>
+  <li><b>Calculation tests</b> — checks that the damage model produces the
+      expected results on known cases.</li>
+</ul>
+
+<div class="note warn">
+<strong>Understanding data quality.</strong> Passing the data checks confirms
+that the required datasets are available and that selected calculations behave
+as expected. It does not guarantee that all input datasets are current,
+complete or accurate. Users should review data sources, update dates, spatial
+resolution and known limitations before using damage estimates in official
+assessments.
+</div>
+
+<h2>Sections of the screen</h2>
+
 <table>
   <thead><tr><th>Section</th><th>Content</th></tr></thead>
   <tbody>
   <tr><td>Unit Costs</td><td>The 100 %-damage reconstruction cost of every class, tagged with provenance: <code>[G]</code> statistics-based, <code>[E]</code> recovery-budget request, <code>[Furukawa]</code> expert proposal — traceable to <code>dataset_inventory.xlsx</code> and the government source PDFs.</td></tr>
-  <tr><td>DDF Curves</td><td>All 13 depth–damage functions (JRC Huizinga 2017, Asia set) plotted from their control points.</td></tr>
+  <tr><td>DDF Curves</td><td>All 13 depth–damage functions plotted from their control points. Four are transcribed from the JRC Asia tables (Huizinga et&nbsp;al. 2017); the rest are tagged as unsourced in the code.</td></tr>
   <tr><td>Province Ratio</td><td>The BPS IKK 2025 construction-cost index per province (DKI Jakarta = 1.00).</td></tr>
   <tr><td>Exposure</td><td>The 38 exposure assets with their producing ministry, feature counts and DIBI column, plus the reference datasets — BIG boundaries (province to village), the 2025 land cover, the BNPB InaRISK population raster. <b>Verify every Asset</b> probes all 44 source Assets and reports each as present or NOT FOUND.</td></tr>
   <tr><td>Sanity Test</td><td>A worked example — one house in Jakarta flooded to 1.5 m — computed live, verifiable by hand.</td></tr>
@@ -52,8 +81,22 @@ nothing. The full source is embedded below.
   </tbody>
 </table>
 
-<h2>Source</h2>
+<h2>For users and for developers</h2>
 
+<table>
+  <thead><tr><th>A user wants to know</th><th>A developer looks at</th></tr></thead>
+  <tbody>
+  <tr><td>Where a dataset comes from</td><td>The Earth Engine Asset name</td></tr>
+  <tr><td>How current it is</td><td>The Asset path and its edition date</td></tr>
+  <tr><td>Which unit cost was used</td><td>The constant and its variable name</td></tr>
+  <tr><td>What a damage function means</td><td>Its control points</td></tr>
+  <tr><td>Whether the data are available</td><td>The result of the Verify run</td></tr>
+  <tr><td>What to be careful about in the estimate</td><td>Regression tests and engine consistency checks</td></tr>
+  </tbody>
+</table>
+
+<details class="source">
+<summary>View source code (01_shared/07_datacheck.js)</summary>
 <div class="code-embed">
   <div class="code-head">
     <span>01_shared/07_datacheck.js</span>
@@ -61,6 +104,7 @@ nothing. The full source is embedded below.
   </div>
   <pre><code id="src" class="language-javascript">Loading source…</code></pre>
 </div>
+</details>
 
 </main>
 
@@ -79,9 +123,9 @@ fetch('code/07_datacheck.js')
     el.textContent = t;
     Prism.highlightElement(el);
   })
-  .catch(function () {
+  .catch(function (e) {
     document.getElementById('src').textContent =
-      'Could not load code/07_datacheck.js — open the "raw" link above instead.';
+      'Could not load code/07_datacheck.js (' + e + '). Open the raw link above.';
   });
 </script>
 </body>

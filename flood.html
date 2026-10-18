@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Flood mapping — DDA Tool</title>
+<title>Flood Mapping and Damage Assessment — DDA Tool</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=Source+Sans+3:wght@400;600&display=swap">
 <link rel="stylesheet" href="assets/style.css">
@@ -24,25 +24,126 @@
 <main class="page">
 
 <div class="title-block">
-<h1>Flood extent and water depth</h1>
+<p class="subtitle">Flood · extent · depth · damage</p>
+<h1>Flood Mapping and Damage Assessment</h1>
 <p class="lead">
-Sentinel-1 radar change detection maps <em>where</em> the water is;
-the FwDET algorithm then estimates <em>how deep</em> it is. One script
-(<code>02_event/01_flood_detection.js</code>) queues two batch tasks: the
-observed extent at 10&nbsp;m, and the depth with its reliability flag at
-30&nbsp;m.
+The tool uses Sentinel-1 radar images to map flooded areas and elevation data
+to estimate floodwater depth. The results are combined with buildings, roads,
+agricultural land and other infrastructure data to estimate flood impacts and
+direct physical damage. Satellite-based flood mapping can support rapid
+assessment, particularly when field access is difficult.
 </p>
 </div>
 
-<h2>1&nbsp;· Flood extent — Sentinel-1 change detection</h2>
+<h2>What the tool provides</h2>
+
+<ul>
+  <li><b>Flood extent</b> — areas detected as flooded from satellite
+      observations.</li>
+  <li><b>Inferred flood extent</b> — additional areas estimated to be flooded
+      using terrain and water-level information.</li>
+  <li><b>Flood depth</b> — estimated water depth in metres.</li>
+  <li><b>Damage estimates</b> — potential direct physical damage to
+      buildings, infrastructure, agriculture and other exposed assets, with
+      affected population and facility counts.</li>
+</ul>
+
+<h2>How it works</h2>
+
+<ol class="steps">
+  <li><b>Select satellite images.</b> Sentinel-1 radar images before and
+      after the flood are selected for the affected area. The user enters one
+      date — the flood date — and the tool picks the reference and
+      post-flood windows around it.</li>
+  <li><b>Detect flooded areas.</b> Open water reflects the radar pulse away
+      from the sensor, so newly flooded ground turns dark. Changes in the
+      radar signal are used to identify flooded areas; permanent water bodies
+      and terrain likely to produce false detections are excluded.</li>
+  <li><b>Estimate water depth.</b> The FwDET method uses the flood boundary
+      and a bare-earth elevation model to estimate the water surface and the
+      depth beneath it.</li>
+  <li><b>Estimate damage.</b> Flood extent and depth are combined with asset
+      locations, replacement costs and depth–damage relationships to
+      estimate direct physical damage, affected people and affected
+      facilities.</li>
+</ol>
+
+<h2 id="classes">Reading the results: observed, inferred, unknown</h2>
 
 <p>
-Radar penetrates clouds, which is decisive during a flood event when optical
-satellites see nothing. The detector follows the
+Not every pixel inside a flood map carries the same kind of evidence. The
+tool keeps the distinction explicit, and so should any report built on it.
+</p>
+
+<table>
+  <thead><tr><th>Class</th><th>Meaning</th><th>How to use it</th></tr></thead>
+  <tbody>
+  <tr><td><b>Observed flood</b></td><td>Flooding detected in the radar image.</td><td>Direct evidence. Omissions under vegetation and in built-up areas, and occasional false detections, are possible.</td></tr>
+  <tr><td><b>Inferred flood</b></td><td>Ground the radar could not decide on, but whose elevation lies below the estimated water surface.</td><td>An estimate from terrain, not a satellite observation. It is part of the reported extent and is labelled separately in the data.</td></tr>
+  <tr><td><b>Unknown</b></td><td>Areas where the observation conditions do not allow a decision — dense canopy, built-up land, permanent water, or no coverage.</td><td><b>Do not read as dry.</b> Unknown areas are excluded from the depth calculation and should be checked in the field where they matter.</td></tr>
+  <tr><td><b>Estimated depth</b></td><td>Water depth computed from the flood boundary and the elevation model.</td><td>A model estimate, not a measured water level.</td></tr>
+  </tbody>
+</table>
+
+<div class="note warn">
+<strong>Unknown is not dry.</strong> A binary flood map silently calls
+everything it did not detect "dry". This tool does not: canopy and built-up
+land the C-band radar cannot see through are reported as <em>unknown</em>,
+which is why flooding beneath them can still appear as <em>inferred</em>
+flood when the water surface says it must be there.
+</div>
+
+<h2>Accuracy and limitations</h2>
+
+<ul>
+  <li>Sentinel-1 can observe the ground through clouds, but flooding under
+      dense vegetation or in built-up areas may be difficult to detect.</li>
+  <li>Some flooded areas are inferred from terrain rather than directly
+      detected by the satellite.</li>
+  <li>Water depth is estimated using elevation data and may differ from
+      actual floodwater depth.</li>
+  <li>Flood maps represent conditions around the satellite observation dates,
+      not necessarily the maximum flood extent.</li>
+  <li>Damage estimates are preliminary direct-damage estimates and should be
+      checked against field observations where available.</li>
+</ul>
+
+<h2>Outputs</h2>
+
+<table>
+  <thead><tr><th>Asset</th><th>Content</th></tr></thead>
+  <tbody>
+  <tr><td><code>floodmask_&lt;event_id&gt;</code></td><td><b>Observed</b> flood extent, binary, 10&nbsp;m. Sentinel-1 only — the light task, and it lands first.</td></tr>
+  <tr><td><code>flooddepth_&lt;event_id&gt;</code></td><td>30&nbsp;m, two bands: <code>depth_m</code> (metres, masked where there is no valid boundary) and <code>depth_flag</code> (1 observed with a valid boundary · 2 inferred · 3 no valid boundary).</td></tr>
+  </tbody>
+</table>
+
+<p>
+The reported flood extent is <b>observed OR inferred</b>; that union is made
+when the Assets are read, so the dashboard and the damage engine always agree.
+Until the depth task has landed, the dashboard shows the observed extent only
+and flags <em>DEPTH PENDING</em>. Downstream, the valuation engine and the
+dashboard are described in the <a href="about.html">Manual</a>.
+</p>
+
+<!-- ================================================================ -->
+<h2 class="technical">Technical details</h2>
+
+<p class="muted">
+Everything below is for analysts who need to know exactly what the scripts
+do. One script (<code>02_event/01_flood_detection.js</code>) queues two batch
+tasks: the observed extent at 10&nbsp;m, and the depth with its reliability
+flag at 30&nbsp;m.
+</p>
+
+<h3>T1 · Flood extent — Sentinel-1 change detection</h3>
+
+<p>
+The detector follows the
 <a href="https://un-spider.org/advisory-support/recommended-practices/recommended-practice-google-earth-engine-flood-mapping">UN-SPIDER
-recommended practice</a>: open water is a smooth surface that reflects the
-radar pulse away from the sensor, so flooded ground turns dark relative to its
-pre-event state.
+recommended practice</a> in outline: open water is a smooth surface that
+reflects the radar pulse away from the sensor, so flooded ground turns dark
+relative to its pre-event state.
 </p>
 
 <ol>
@@ -53,43 +154,35 @@ pre-event state.
       days after it (during or after the flood); the lengths and the gap
       can be changed under <em>Advanced settings</em>. The gap matters
       because the rain that causes a flood arrives days before the peak, so
-      a reference scene taken the day before is already wet and the ratio
-      below would under-detect; six days is one Sentinel-1 repeat, short
+      a reference scene taken the day before is already wet and the change
+      test would under-detect; six days is one Sentinel-1 repeat, short
       enough that every orbit still has a look inside the window.
-      Ascending and descending passes are both
-      searched. Each Sentinel-1 relative orbit is paired with itself — its
-      own pre-event scenes against its own post-event scenes — so the two
-      sides always share the same viewing geometry, and only orbits that
-      observed the AOI in both windows take part.</li>
+      Ascending and descending passes are both searched. Each Sentinel-1
+      relative orbit is paired with itself — its own pre-event scenes
+      against its own post-event scenes — so the two sides always share the
+      same viewing geometry, and only orbits that observed the AOI in both
+      windows take part.</li>
   <li><b>Orbit election</b> — within each orbit the pre-event side takes,
       per pixel, the latest scene before the gap and the post-event side the
       earliest scene after the flood date. Both sides are composited the same
       way because the change threshold below was set for a one-scene-against-
-      one-scene comparison. Since 2026-09-28 the orbits are ranked <em>once
-      for the whole AOI</em> — by how much of it each orbit sees in both
-      windows, ties broken by the earlier post-event scene — and the map is
-      mosaicked by that rank: the primary orbit wherever it has data, the
-      next only in its gaps. One viewing geometry and one date per region,
-      clean seams, and "which orbit and date is this map" has an answer. The
-      console prints the ranking and the primary orbit's share of the flood;
-      the map shows <em>days after flood</em> per pixel. (The earlier
-      per-pixel "closest scene wins" election remains available as
-      <code>orbitMode: 'closest'</code>.)</li>
+      one-scene comparison. The orbits are ranked <em>once for the whole
+      AOI</em> — by how much of it each orbit sees in both windows, ties
+      broken by the earlier post-event scene — and the map is mosaicked by
+      that rank: the primary orbit wherever it has data, the next only in its
+      gaps. One viewing geometry and one date per region, clean seams, and
+      "which orbit and date is this map" has an answer. The console prints
+      the ranking and the primary orbit's share of the flood; the map shows
+      <em>days after flood</em> per pixel. (A per-pixel "closest scene wins"
+      election remains available as <code>orbitMode: 'closest'</code>.)</li>
   <li><b>Speckle smoothing</b> — a 50&nbsp;m circular focal mean removes the
       salt-and-pepper noise inherent to SAR.</li>
   <li><b>Change test</b> — the pixel is flagged as flooded when the
       backscatter <em>drops</em> by at least 3&nbsp;dB:
       \( \sigma^0_{\text{pre}} - \sigma^0_{\text{post}} \ge 3\ \mathrm{dB} \).
-      This replaced the UN-SPIDER ratio test (post/pre &gt; 1.25 on the dB
-      values) on 2026-09-27. The ratio is arithmetic on a logarithm: the drop
-      it demands grows with pre-event brightness — 1.25&nbsp;dB on bright
-      land, 5&nbsp;dB on dark — so it fired inside the natural 1–2&nbsp;dB
-      variability of bright land and demanded the impossible of dark land.
-      Measured on Aceh Tamiang against a no-flood control date six days
-      earlier, the false-alarm floor fell from 14&nbsp;% to 2&nbsp;% of the
-      detection and hillslope contamination by 64&nbsp;%. −3&nbsp;dB is the
-      literature value and the knee of the signal-to-noise curve; it was not
-      chosen by looking at damage.</li>
+      −3&nbsp;dB is the literature value and the knee of the signal-to-noise
+      curve; it was not chosen by looking at damage. (Why a dB difference
+      rather than the UN-SPIDER ratio: see the changelog.)</li>
   <li><b>Permanent water</b> — pixels that are water in a normal year are
       removed: JRC Global Surface Water v1.4, seasonality ≥ 10 months (the
       UN-SPIDER rule) or occurrence ≥ 80 %. The second band fills the
@@ -97,14 +190,12 @@ pre-event state.
       flood a few weeks a year sit far below either bar and are kept.</li>
   <li><b>Refinement</b> — clusters smaller than 50 pixels (0.5&nbsp;ha) are
       removed with a connected-pixel filter, and terrain steeper than 5°
-      (where radar shadow mimics water) is masked. The slope comes from
-      FABDEM at 30&nbsp;m since 2026-09-27: the 464&nbsp;m HydroSHEDS DEM used
-      before averages a mountainside below 5°, leaving 8&nbsp;% of the mask
-      on ground FABDEM calls steep. The result is pinned to a fixed 10&nbsp;m
-      grid so that it does not change with zoom level.</li>
+      (where radar shadow mimics water) is masked, using the slope of FABDEM
+      at 30&nbsp;m. The result is pinned to a fixed 10&nbsp;m grid so that it
+      does not change with zoom level.</li>
 </ol>
 
-<h3>Three classes, not two: flood / dry / unknown</h3>
+<h3>T2 · Three classes, not two: flood / dry / unknown</h3>
 
 <p>
 A binary mask asserts that everything not detected is dry, and the depth model
@@ -114,10 +205,9 @@ cannot see through — and not the water's edge, the ground does not rise there
 and the water-level reference is lost. A synthetic test with the DEM error
 cancelled exactly recovered 98&nbsp;% of a known depth from a hole-free extent
 and only 3–7&nbsp;% once the measured hole pattern was punched into it. So
-since 2026-09-27 every pixel is classified as <b>flood</b>, <b>dry</b> or
-<b>unknown</b> — the same idea as the Copernicus GFM exclusion mask — and only
-confidently dry land may act as a boundary. A pixel is unknown when any of
-these holds:
+every pixel is classified as <b>flood</b>, <b>dry</b> or <b>unknown</b> — the
+same idea as the Copernicus GFM exclusion mask — and only confidently dry land
+may act as a boundary. A pixel is unknown when any of these holds:
 </p>
 
 <ul>
@@ -150,7 +240,7 @@ underestimation Cohen et al. report at Lake Houston). Depth is computed on the
 unmasked extent and masked afterwards, matching the extent.
 </div>
 
-<h3>Alternative input: pre-analysed flood polygons</h3>
+<h3>T3 · Alternative input: pre-analysed flood polygons</h3>
 <p>
 When a flood map already exists (drone survey, provincial GIS office,
 UNOSAT), it can be uploaded as an Earth Engine table and rasterised onto the
@@ -158,7 +248,7 @@ same 10&nbsp;m grid instead of running the SAR detection. Everything
 downstream — depth, valuation, dashboard — is identical.
 </p>
 
-<h2>2&nbsp;· Water depth — FwDET on a bare-earth DEM</h2>
+<h3>T4 · Water depth — FwDET on a bare-earth DEM</h3>
 
 <p>
 Damage curves need depth, not just extent. The Floodwater Depth Estimation Tool
@@ -189,29 +279,27 @@ on FABDEM's own 30&nbsp;m grid; 10&nbsp;m was oversampling it.
 Three things about how the algorithm runs here. The boundary is taken from
 <em>confidently dry</em> land only — unknown pixels are dropped from it, so
 the interpolation reaches past a canopy edge to a boundary that is plausibly
-the water's edge. The reach of that interpolation is 5&nbsp;km, raised from
-1&nbsp;km on 2026-09-28 once the unknown edges were gone and the core of a
-large flood — the most certainly flooded place on the map — was being left
-without a surface. And where the interpolated surface rests on essentially no
-dry land within its reach (under 3&nbsp;% of the neighbourhood), the depth is
-<em>masked</em> rather than invented, so that "depth unknown" and
-"0&nbsp;m" stay distinguishable downstream.
+the water's edge. The reach of that interpolation is 5&nbsp;km, so that the
+core of a large flood — the most certainly flooded place on the map — is not
+left without a surface. And where the interpolated surface rests on
+essentially no dry land within its reach (under 3&nbsp;% of the
+neighbourhood), the depth is <em>masked</em> rather than invented, so that
+"depth unknown" and "0&nbsp;m" stay distinguishable downstream.
 </p>
 
-<h3>Inferred flood</h3>
+<h3>T5 · Inferred flood</h3>
 
 <p>
 An unknown pixel whose terrain sits <em>below</em> the estimated water surface
-is inferred to be flooded (decision of 2026-09-28). It is an inference from
-terrain, not a satellite observation, so it is carried separately: the depth
-Asset's <code>depth_flag</code> band records 1 for depth from a valid boundary,
-2 for inferred, 3 for no valid boundary (depth masked). The reported flood
-extent is <b>observed OR inferred</b>, and that union is made when the Assets
-are <em>read</em> (<code>C.floodExtentImage()</code>), not when they are
-written — see Outputs.
+is inferred to be flooded. It is an inference from terrain, not a satellite
+observation, so it is carried separately: the depth Asset's
+<code>depth_flag</code> band records 1 for depth from a valid boundary, 2 for
+inferred, 3 for no valid boundary (depth masked). The reported flood extent is
+<b>observed OR inferred</b>, and that union is made when the Assets are
+<em>read</em> (<code>C.floodExtentImage()</code>), not when they are written.
 </p>
 
-<h2>Key parameters</h2>
+<h3>T6 · Key parameters</h3>
 
 <table>
   <thead><tr><th>Parameter</th><th>Value</th><th>Where</th></tr></thead>
@@ -236,27 +324,19 @@ written — see Outputs.
   </tbody>
 </table>
 
-<h2>Outputs</h2>
+<h3>T7 · Changelog</h3>
+
 <table>
-  <thead><tr><th>Asset</th><th>Content</th></tr></thead>
+  <thead><tr><th>Date</th><th>Change</th><th>Why</th></tr></thead>
   <tbody>
-  <tr><td><code>floodmask_&lt;event_id&gt;</code></td><td><b>Observed</b> flood extent, binary, 10 m. Sentinel-1 only — the light task, and it lands first.</td></tr>
-  <tr><td><code>flooddepth_&lt;event_id&gt;</code></td><td>30 m, two bands: <code>depth_m</code> (metres, masked where there is no valid boundary) and <code>depth_flag</code> (1 observed with a valid boundary · 2 inferred · 3 no valid boundary).</td></tr>
+  <tr><td>2026-09-27</td><td>Change test: dB difference (≥ 3 dB drop) replaces the UN-SPIDER ratio (post/pre &gt; 1.25 on dB values).</td><td>The ratio is arithmetic on a logarithm: the drop it demands grows with pre-event brightness — 1.25 dB on bright land, 5 dB on dark — so it fired inside the natural 1–2 dB variability of bright land and demanded the impossible of dark land. On Aceh Tamiang, against a no-flood control date six days earlier, the false-alarm floor fell from 14 % to 2 % of the detection and hillslope contamination by 64 %.</td></tr>
+  <tr><td>2026-09-27</td><td>Slope mask from FABDEM 30 m instead of the 464 m HydroSHEDS DEM.</td><td>The coarse DEM averages a mountainside below 5°, leaving 8 % of the mask on ground FABDEM calls steep.</td></tr>
+  <tr><td>2026-09-27</td><td>Three classes (flood / dry / unknown); the depth boundary uses confidently dry land only.</td><td>Hole edges inside the detected flood were being read as shorelines, collapsing the depth estimate (T2).</td></tr>
+  <tr><td>2026-09-28</td><td>Orbits ranked once per AOI and mosaicked by rank (previously per-pixel "closest scene wins").</td><td>One viewing geometry and one date per region; clean seams.</td></tr>
+  <tr><td>2026-09-28</td><td>Depth interpolation reach 1 km → 5 km; inferred flood (flag 2) added to the reported extent; depth exported at 30 m.</td><td>Once the unknown edges were dropped, the core of large floods was left without a surface; 10 m oversampled the 30 m DEM.</td></tr>
+  <tr><td>2026-10-16</td><td><code>floodmask_</code> now holds the observed extent only; observed ∪ inferred is united on read.</td><td>Writing the union forced the mask task to run the whole depth model province-wide (Aceh: still running after 148 h), and the depth task ran it again. The definition of the extent did not change.</td></tr>
   </tbody>
 </table>
-
-<div class="note">
-<strong>Why the mask no longer carries the inferred pixels (2026-10-16).</strong>
-Until then the mask Asset was written as observed&nbsp;∪&nbsp;inferred — which
-meant the mask task had to run the whole depth model, province-wide, only to
-burn <code>depth_flag&nbsp;==&nbsp;2</code> into a 10&nbsp;m raster, and the
-depth task then ran it again. Aceh's mask export was still running after
-148&nbsp;hours. The definition of the extent has not changed; the union is now
-made on read by one accessor that every consumer uses, and the mask task
-finishes in the time a Sentinel-1 change detection takes. Until the depth task
-lands the dashboard shows the observed extent and flags <em>DEPTH PENDING</em>;
-run Stage&nbsp;2 only once both Assets exist.
-</div>
 
 <h2>References</h2>
 <ul>

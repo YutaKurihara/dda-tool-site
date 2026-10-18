@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Earthquake damage — DDA Tool</title>
+<title>Potential Building Collapse Detection — DDA Tool</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=Source+Sans+3:wght@400;600&display=swap">
 <link rel="stylesheet" href="assets/style.css">
@@ -24,18 +24,150 @@
 <main class="page">
 
 <div class="title-block">
-<h1>Earthquake building collapse — RV-PWTT</h1>
+<p class="subtitle">Earthquake · potential collapse · damage</p>
+<h1>Potential Building Collapse Detection</h1>
 <p class="lead">
-Building collapse changes how a pixel scatters radar and reflects light. The
-detector (<code>02_event/03_earthquake_detection.js</code>) measures that
-change with a pixel-wise <i>t</i>-statistic scaled by the <em>pre-event</em>
-variability only — a variant of the PWTT approach popularised by
-<a href="https://oballinger.github.io/PWTT/">Ballinger's damage assessments
-in Ukraine and Turkey</a>.
+The tool uses Sentinel-1 radar and Sentinel-2 optical images to identify
+buildings that may have collapsed during an earthquake. It compares satellite
+observations before and after the earthquake to detect changes associated
+with severe building damage. The results provide an initial indication of
+potentially collapsed buildings and can help prioritise field inspections.
 </p>
 </div>
 
-<h2>The statistic</h2>
+<h2>What the tool provides</h2>
+
+<ul>
+  <li>Maps of areas showing significant satellite-observed change after an
+      earthquake.</li>
+  <li>Identification of buildings potentially affected by collapse.</li>
+  <li>Preliminary estimates of potentially collapsed building area and the
+      associated direct physical damage (reconstruction cost).</li>
+  <li>Information to support field verification and emergency response.</li>
+</ul>
+
+<p>
+The words <em>may have collapsed</em>, <em>potentially</em> and
+<em>preliminary</em> are used deliberately. This is a system that extracts
+places where collapse is suspected so that field verification can be
+targeted, not a system that confirms collapse.
+</p>
+
+<h2>How it works</h2>
+
+<ol class="steps">
+  <li><b>Establish pre-earthquake conditions.</b> Satellite images collected
+      during the year before the earthquake are used to determine the normal
+      radar and optical appearance of every pixel, and how much it normally
+      varies.</li>
+  <li><b>Detect changes.</b> The first post-earthquake observations are
+      compared with the pre-earthquake conditions. Because the comparison is
+      scaled by the pre-event variability only, it works from the very first
+      post-event image — no waiting for a stack of after-images, no training
+      data.</li>
+  <li><b>Identify potential collapse.</b> Building pixels showing unusually
+      large changes are flagged as possible building collapse locations.</li>
+  <li><b>Estimate damage.</b> Flagged building footprints are combined with
+      building data to estimate potentially collapsed building area and the
+      reconstruction cost, assuming total loss.</li>
+</ol>
+
+<h2>Validation — 2018 Palu earthquake</h2>
+
+<div class="stat-row">
+  <div class="stat">
+    <div class="num">24%</div>
+    <div class="lbl">Precision</div>
+    <div class="sub">Share of the flagged building points that matched the
+      reference damage classification</div>
+  </div>
+  <div class="stat">
+    <div class="num">62%</div>
+    <div class="lbl">Recall</div>
+    <div class="sub">Share of the reference-positive building points that the
+      method flagged</div>
+  </div>
+</div>
+
+<p class="muted">
+Published F2 operating point, scored against the Copernicus EMS EMSR317
+grading of the 2018 Palu earthquake: 68,722 building points in the four fully
+inventoried areas, of which 2,324 were graded destroyed or damaged. The unit
+is the graded building point, scored as the maximum statistic within 10&nbsp;m
+of it. These figures are not a guarantee of performance in other earthquakes.
+</p>
+
+<h2>Accuracy and limitations</h2>
+
+<p>
+In the 2018 Palu earthquake validation, the default setting achieved a
+precision of 24&nbsp;% and a recall of 62&nbsp;%. This means the method
+identified approximately 62&nbsp;% of the reference-positive cases, but many
+of the flagged detections did not match the reference damage classification.
+Part of that is the rarity of collapse: with about 3&nbsp;% of buildings
+affected, even a small false-alarm rate on the remaining 97&nbsp;% produces
+more false flags than true ones. The method is intended to support rapid
+screening and field inspection, not to confirm building collapse.
+</p>
+
+<ul>
+  <li>Buildings graded <em>destroyed</em> are recovered at about 0.7 (0.85
+      where cloud-free optical data exist); buildings with partial damage and
+      an intact roof are mostly not separable from intact ones at 10&nbsp;m.
+      Read the counts as <em>potentially collapsed buildings</em>, not as all
+      damaged houses.</li>
+  <li>What is detectable depends on how buildings fail. Ground that was wiped
+      clean (liquefaction flows, tsunami) is seen clearly; masonry walls that
+      fail while the roof stays in place are largely invisible from above —
+      to radar and to high-resolution optical interpretation alike.</li>
+  <li>The method needs a year of pre-event satellite coverage of the same
+      area. Post-event, one Sentinel-1 pass is enough; optical images add
+      skill only where they are cloud-free.</li>
+  <li>Building footprints come from a national dataset that predates the
+      event; buildings missing from it cannot be flagged.</li>
+  <li>Damage estimates assume total loss inside the flagged footprints and
+      require field verification.</li>
+</ul>
+
+<h2>What the layers mean</h2>
+
+<table>
+  <thead><tr><th>Layer</th><th>Name used here</th><th>Meaning</th></tr></thead>
+  <tbody>
+  <tr><td>Continuous heat map</td><td><b>Satellite change indicator</b></td><td>How strongly each pixel changed relative to its normal variability. A picture of change, not of damage.</td></tr>
+  <tr><td>Binary mask</td><td><b>Potential collapse areas</b></td><td>Building pixels where the change indicator exceeds the calibrated threshold — the areas suspected of collapse. This is what the damage estimate is built on.</td></tr>
+  <tr><td>Money</td><td><b>Estimated direct physical damage</b></td><td>Reconstruction cost of the potentially collapsed footprints, assuming total loss. Not an economic-loss figure.</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+<strong>Common rule for landslides, earthquakes and fires.</strong> For
+preliminary damage estimation, assets within the detected area are assumed to
+be completely destroyed. Actual damage must be verified separately.
+</div>
+
+<h2>Outputs</h2>
+
+<table>
+  <thead><tr><th>Asset</th><th>Content</th></tr></thead>
+  <tbody>
+  <tr><td><code>quakemask_&lt;event_id&gt;</code></td><td>Binary potential-collapse extent, 10&nbsp;m (band <code>flooded</code>, shared schema). Event ids carry the <code>quake_</code> prefix.</td></tr>
+  <tr><td><code>affectedbld_&lt;event_id&gt;</code></td><td>Written by Stage&nbsp;2: the whole building footprints that touch the flagged extent, used by the dashboard's Housing layer.</td></tr>
+  </tbody>
+</table>
+
+<!-- ================================================================ -->
+<h2 class="technical">Technical details</h2>
+
+<p class="muted">
+For analysts. The detector is <code>02_event/03_earthquake_detection.js</code>;
+the statistic is RV-PWTT, a reference-variance variant of the pixel-wise
+<i>t</i>-test (PWTT) popularised by
+<a href="https://oballinger.github.io/PWTT/">Ballinger's damage assessments in
+Ukraine and Gaza</a>.
+</p>
+
+<h3>T1 · The statistic</h3>
 
 <p>
 For each pixel and each channel, a one-year pre-event stack gives a mean
@@ -57,20 +189,24 @@ of after-images, no training data, no damage labels.
 </p>
 
 <ul>
-  <li><b>SAR channels</b> — Sentinel-1 VV and VH per orbit, Lee-filtered;
-      \(T_{\text{sar}}\) is the maximum over channels.</li>
+  <li><b>SAR channels</b> — Sentinel-1 VV and VH per relative orbit,
+      Lee-filtered; \(T_{\text{sar}}\) is the maximum over channels.</li>
   <li><b>Optical channels (optional)</b> — six Sentinel-2 spectral/texture
       features, cloud-masked per pixel (Cloud Score+ cs_cdf ≥ 0.6, scenes
       &lt; 40 % cloud); \(T_{\text{opt}}\) is the maximum over features.</li>
+  <li><b>Reference period</b> — one year before the event (a full seasonal
+      cycle), with at least 10 SAR and 15 optical scenes so that
+      \(s_{\text{pre}}\), the only variance in the statistic, is well
+      determined. Post-event window: the first two months.</li>
 </ul>
 
-<h2>Decision rule and operating points</h2>
+<h3>T2 · Decision rule and operating points</h3>
 
 <p>
-A building pixel is flagged <b>collapsed</b> when either statistic exceeds its
-threshold (OR rule). A pixel whose optical side is lost to cloud falls back to
-the SAR test alone, so the map never has cloud holes. The verdict is
-deliberately binary — collapsed / not collapsed, no intermediate grade.
+A building pixel is flagged as potential collapse when either statistic exceeds
+its threshold (OR rule). A pixel whose optical side is lost to cloud falls back
+to the SAR test alone, so the map never has cloud holes. The verdict is
+deliberately binary — flagged / not flagged, no intermediate grade.
 </p>
 
 <table>
@@ -78,62 +214,48 @@ deliberately binary — collapsed / not collapsed, no intermediate grade.
   <tbody>
   <tr><td><b>F2</b> (default)</td><td>14.4</td><td>7.0</td><td>0.24</td><td>0.62</td><td>Early response — a missed collapsed building costs more than a false alarm</td></tr>
   <tr><td><b>F1</b></td><td>15.0</td><td>8.1</td><td>0.29</td><td>0.52</td><td>Balanced reporting</td></tr>
+  <tr><td><b>SAR only, F2</b></td><td>9.1</td><td>—</td><td>0.16</td><td>0.47</td><td>First pass, or when no cloud-free optical scene exists</td></tr>
+  <tr><td><b>SAR only, F1</b></td><td>11.6</td><td>—</td><td>0.20</td><td>0.34</td><td>Balanced, SAR only</td></tr>
   </tbody>
 </table>
 
 <p>
-Both points were calibrated by a full threshold sweep against the 2018 Palu
-earthquake (Copernicus EMS EMSR317: 68,722 graded buildings in the four
-fully-inventoried areas, 2,324 destroyed or damaged). Frozen on 2026-08-31.
+All points were calibrated by a full threshold sweep against the 2018 Palu
+earthquake (EMSR317, four fully inventoried areas) and frozen on 2026-08-31.
+Precision and recall are over all graded positives (destroyed and damaged);
+restricted to <em>destroyed</em> buildings the SAR statistic's ROC-AUC is
+0.82, and 0.94 with cloud-free optical data.
 </p>
 
-<div class="note">
-<strong>What the detector sees:</strong> buildings graded <em>destroyed</em>
-are recovered at about 0.7 (0.85 where cloud-free optical data exist);
-buildings graded <em>damaged</em> (partial damage, roof intact) are mostly
-not separable from intact ones at 10 m. Read the counts as
-<em>collapsed buildings</em>, not as all damaged houses.
-</div>
-
-<h2>Sensor modes</h2>
+<h3>T3 · Sensor modes</h3>
 <ul>
-  <li><b>SAR + Optical</b> — the calibrated configuration (OR rule).</li>
-  <li><b>SAR only</b> — lighter and available from the first Sentinel-1 pass;
-      uses the same \(T_{\text{sar}}\) threshold, slightly conservative on
-      its own.</li>
+  <li><b>SAR + Optical</b> — the calibrated fusion (OR rule). Optical adds
+      skill only where cloud-free scenes exist; in the wet season, or for
+      events before Sentinel-2 Level-2A coverage, it falls back to SAR.</li>
+  <li><b>SAR only</b> — lighter and available from the first Sentinel-1 pass,
+      with its own calibrated thresholds (table above).</li>
 </ul>
 
-<h2>Display and outputs</h2>
+<h3>T4 · Display and valuation</h3>
 
 <p>
-The preview shows a smoothed \(T_{\text{sar}}\) heat map (yellow → red →
-purple, like the public PWTT app) wherever \(T_{\text{sar}} \geq 2.7\), the
-99&nbsp;% significance point — an intuitive "estimated damage" picture. The
-binary collapse extent that Stage&nbsp;2 actually values is a separate
-toggleable layer.
+The preview shows a smoothed \(T_{\text{sar}}\) heat map — the
+<em>satellite change indicator</em> — wherever \(T_{\text{sar}} \geq 2.7\),
+the 99&nbsp;% significance point, and the binary <em>potential collapse
+areas</em> that Stage&nbsp;2 values as a separate toggleable layer. The export
+is a mask only (<code>quakemask_&lt;id&gt;</code>); the valuation engine
+applies the total-loss convention — flagged footprint area × unit cost ×
+100&nbsp;% — and building overlap happens in the damage engine, not in the
+detector.
 </p>
-
-<p>
-As with landslides, the export is a mask only
-(<code>quakemask_&lt;id&gt;</code>, event ids prefixed <code>quake_</code>).
-The valuation engine applies the total-loss convention: collapsed footprint
-area × unit cost × 100&nbsp;%. Building overlap happens in the damage engine,
-not in the detector.
-</p>
-
-<table>
-  <thead><tr><th>Asset</th><th>Content</th></tr></thead>
-  <tbody>
-  <tr><td><code>quakemask_&lt;event_id&gt;</code></td><td>Binary collapse extent, 10 m (band <code>flooded</code>, shared schema)</td></tr>
-  </tbody>
-</table>
 
 <h2>References</h2>
 <ul>
-  <li>Ballinger, O. — Pixel-Wise T-Test (PWTT) building damage assessment
+  <li>Ballinger, O. (2025). Open access battle damage detection via Pixel-Wise
+      T-Test on Sentinel-1 imagery. <i>Remote Sensing of Environment</i> 331
       (<a href="https://oballinger.github.io/PWTT/">project site</a>).</li>
   <li>Copernicus EMS EMSR317 — Palu (Sulawesi) 2018 grading dataset
-      (calibration ground truth).</li>
+      (calibration reference).</li>
 </ul>
 
 </main>

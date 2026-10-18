@@ -1205,7 +1205,7 @@ function renderEngineTest() {
     'T3 is the 9× guard: InaRISK is a 30 m people-per-pixel grid, so ' +
     'reducing it at 10 m would replicate every value 9 times. Exposed ' +
     'population must never exceed the districts\' total population. ' +
-    'It checks the gridded path — floods and landslides. An earthquake\'s ' +
+    'It checks the gridded path — floods, landslides and fires. An earthquake\'s ' +
     'published population comes from building counts instead, so this ' +
     'test does not cover it.', '0 0 4px 0'));
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Landslide mapping — DDA Tool</title>
+<title>Landslide Detection and Impact Assessment — DDA Tool</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=Source+Sans+3:wght@400;600&display=swap">
 <link rel="stylesheet" href="assets/style.css">
@@ -24,16 +24,110 @@
 <main class="page">
 
 <div class="title-block">
-<h1>Landslide extent</h1>
+<p class="subtitle">Landslide · extent · road impact · damage</p>
+<h1>Landslide Detection and Impact Assessment</h1>
 <p class="lead">
-A landslide strips vegetation and exposes bare soil or rock. The detector
-(<code>02_event/02_landslide_detection.js</code>) finds this signature in
-Sentinel-2 optical imagery as a sharp drop in vegetation index, confirmed by a
-bare-soil or water signal.
+The tool uses Sentinel-2 satellite images to identify potential landslide
+areas by detecting vegetation loss and exposed soil after a disaster. The
+detected areas are combined with road, building and infrastructure data to
+identify potentially affected assets and estimate direct physical damage. The
+results can help identify areas requiring field inspection and road sections
+that may be blocked by landslides.
 </p>
 </div>
 
-<h2>Detection logic</h2>
+<h2>What the tool provides</h2>
+
+<ul>
+  <li>Maps of potential landslide-affected areas.</li>
+  <li>Locations where detected landslides intersect national, regional and
+      toll roads — <em>potential</em> road blockages.</li>
+  <li>Estimates of exposed buildings, infrastructure and people.</li>
+  <li>Preliminary estimates of direct physical damage.</li>
+</ul>
+
+<h2>How it works</h2>
+
+<ol class="steps">
+  <li><b>Compare satellite images.</b> Cloud-free Sentinel-2 composites
+      before and after the disaster are built over equal windows, so that
+      both sides are estimated the same way.</li>
+  <li><b>Detect surface changes.</b> Areas showing a large decrease in
+      vegetation and an increase in exposed soil (or newly ponded ground) are
+      identified as potential landslides.</li>
+  <li><b>Remove unlikely detections.</b> Clouds, small isolated changes and
+      ground that was not vegetated to begin with are excluded.</li>
+  <li><b>Assess potential impacts.</b> The detected areas are overlaid with
+      buildings, roads and infrastructure to estimate potential damage and to
+      identify road sections requiring verification.</li>
+</ol>
+
+<h2>Damage estimation</h2>
+
+<p>
+The damage model assumes that assets located within detected landslide areas
+are completely destroyed. Their damage is therefore estimated using
+100&nbsp;% of the applicable replacement cost. This is a simplified assumption
+for preliminary assessment: actual damage may vary and should be verified
+using field observations.
+</p>
+
+<div class="note">
+<strong>Common rule for landslides, earthquakes and fires.</strong> For
+preliminary damage estimation, assets within the detected area are assumed to
+be completely destroyed. Actual damage must be verified separately.
+</div>
+
+<h2>Potential road blockages</h2>
+
+<p>
+The tool identifies locations where detected landslide areas intersect
+national, regional or toll roads. These locations indicate <em>possible</em>
+road blockages and can help prioritise field inspections. They are a
+satellite-detected overlap, not a confirmed closure: actual road conditions,
+including whether a road remains passable, must be confirmed by local
+authorities. On the dashboard they are drawn as × markers, each with the
+length of road affected and the road name.
+</p>
+
+<h2>Accuracy and limitations</h2>
+
+<ul>
+  <li>The method requires usable cloud-free satellite images before and after
+      the event; in persistent cloud the map is delayed until one exists.</li>
+  <li>Landslides hidden beneath intact vegetation may not be detected.</li>
+  <li>Small landslides (below about 500&nbsp;m²) may be missed.</li>
+  <li>Vegetation loss caused by logging, agriculture or other activities may
+      be incorrectly classified as landslides.</li>
+  <li>Road blockage locations and damage estimates require field
+      verification.</li>
+</ul>
+
+<h2>Outputs</h2>
+
+<table>
+  <thead><tr><th>Asset</th><th>Content</th></tr></thead>
+  <tbody>
+  <tr><td><code>landslidemask_&lt;event_id&gt;</code></td><td>Binary landslide extent, 10&nbsp;m (band <code>flooded</code>, shared schema)</td></tr>
+  <tr><td><code>roadblock_&lt;event_id&gt;</code></td><td>One point per contiguous stretch where the extent crosses a national, regional or toll road, with the metres of road affected and the road name — a <em>possible</em> blockage, drawn × on the dashboard</td></tr>
+  </tbody>
+</table>
+
+<p>
+Both tasks are queued at once. If the slide touches no road, the blockage task
+fails with <em>"Table is empty"</em> — Earth Engine cannot write an empty
+table to an Asset — and the dashboard simply omits the × layer. That is a
+normal result, not an error.
+</p>
+
+<!-- ================================================================ -->
+<h2 class="technical">Technical details</h2>
+
+<p class="muted">
+For analysts. The detector is <code>02_event/02_landslide_detection.js</code>.
+</p>
+
+<h3>T1 · Detection logic</h3>
 
 <ol>
   <li><b>Image pairs</b> — cloud-free Sentinel-2 median composites are
@@ -58,25 +152,21 @@ bare-soil or water signal.
       preview — and shallow slides here are often 10–40 m wide.</li>
 </ol>
 
-<h2>From extent to damage</h2>
+<h3>T2 · How the total-loss rule is implemented</h3>
 
 <p>
 Unlike a flood, a landslide has no depth gradient that maps onto a
-depth–damage curve — anything caught in the slide mass or scar is effectively
-destroyed. The pipeline encodes this with a simple convention:
-</p>
-
-<div class="note">
-<strong>Total-loss convention:</strong> the detector exports only a mask
+depth–damage curve. The detector exports only a mask
 (<code>landslidemask_&lt;id&gt;</code>, no depth asset). The valuation engine
 synthesises a constant 10&nbsp;m depth inside the mask; every damage curve
 saturates at 100&nbsp;% well before 10&nbsp;m, so all exposed assets inside
 the extent are valued at full reconstruction cost. No special-case code paths
-exist downstream — Stage&nbsp;2 and the dashboard are byte-for-byte the same
-as for floods.
-</div>
+exist downstream — Stage&nbsp;2 and the dashboard are the same as for floods.
+The event id carries the <code>landslide_</code> prefix; the engine and
+dashboard route the total-loss convention from this prefix alone.
+</p>
 
-<h2>Key parameters</h2>
+<h3>T3 · Key parameters</h3>
 
 <table>
   <thead><tr><th>Parameter</th><th>Value</th><th>Rationale</th></tr></thead>
@@ -87,38 +177,19 @@ as for floods.
   <tr><td>Bare-soil check</td><td>BSI &gt; 0.05, or MNDWI &gt; 0 with B8 &lt; 0.25</td><td>Scar looks like soil/rock or ponded debris</td></tr>
   <tr><td>Minimum cluster</td><td>5 px ≈ 500 m²</td><td>Smaller fragments are noise</td></tr>
   <tr><td>Cloud mask</td><td>Cloud Score+ (<code>linkCollection</code>)</td><td>Replaced s2cloudless join, which ran out of memory on long stacks</td></tr>
+  <tr><td>Road register</td><td>National, regional and toll roads (exposure catalog)</td><td>Only roads with a maintained register are tested</td></tr>
   </tbody>
 </table>
 
-<h2>Limits to keep in mind</h2>
-<ul>
-  <li>Optical detection needs at least one usable clear scene after the event —
-      in persistent cloud the map is delayed until one exists.</li>
-  <li>Slides under intact forest canopy, or smaller than ~500 m², are not
-      detected.</li>
-  <li>The event id carries the <code>landslide_</code> prefix; the engine and
-      dashboard route the total-loss convention from this prefix alone.</li>
-</ul>
+<h3>T4 · Changelog</h3>
 
-<h2>Outputs</h2>
 <table>
-  <thead><tr><th>Asset</th><th>Content</th></tr></thead>
+  <thead><tr><th>Date</th><th>Change</th><th>Why</th></tr></thead>
   <tbody>
-  <tr><td><code>landslidemask_&lt;event_id&gt;</code></td><td>Binary landslide extent, 10 m (band <code>flooded</code>, shared schema)</td></tr>
-  <tr><td><code>roadblock_&lt;event_id&gt;</code></td><td>One point per contiguous stretch where the extent crosses a national, regional or toll road, with the metres of road blocked and the road name — a <em>possible</em> closure, drawn × on the dashboard</td></tr>
+  <tr><td>2026-10-16</td><td>The road-blockage table is queued unconditionally; a province-wide preview draws the × markers but does not count them.</td><td>The script used to count the crossings interactively before queuing the table; province-wide that count exceeded the five-minute interactive limit and the table was never queued. An empty result now fails as "Table is empty", which the dashboard treats as "no blockage".</td></tr>
+  <tr><td>2026-10-16</td><td>The before/after composites are no longer clipped to the AOI polygon; only the final extent is.</td><td>Clipping with a 24,000-vertex province polygon three times slowed the export for no change in the result (the export region decides the output).</td></tr>
   </tbody>
 </table>
-
-<p>
-Both tasks are queued at once. If the slide touches no road, the closure task
-fails with <em>"Table is empty"</em> — Earth Engine cannot write an empty
-table to an Asset — and the dashboard simply omits the × layer. That is a
-normal result, not an error. (Until 2026-10-16 the script counted the
-crossings interactively before queuing the table; province-wide that count
-exceeded the five-minute interactive limit, and the table was never queued at
-all.) For the same reason a province-wide preview draws the × markers but does
-not count them; a kabupaten preview still reports the count.
-</p>
 
 </main>
 

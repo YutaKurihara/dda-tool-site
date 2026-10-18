@@ -21,9 +21,95 @@
   <a class="navlink" href="about.html">Manual</a>
 </nav>
 
+<main class="page intro">
+
+<div class="title-block">
+<p class="subtitle">Disaster Damage Assessment (DDA Tool)</p>
+<h1>Satellite-based disaster mapping and damage estimation for Indonesia</h1>
+<p class="lead">
+The DDA Tool uses satellite data to identify disaster-affected areas and
+estimate direct physical damage to buildings, infrastructure, agriculture and
+other assets. Developed to support BNPB's disaster assessment activities, it
+combines satellite observations with Indonesian geospatial data to produce
+maps, damage estimates and reporting tables. The results help identify
+affected areas, prioritise field verification and support disaster damage
+reporting.
+</p>
+</div>
+
+<div class="tiles">
+  <div class="tile"><b>1 · Map</b>
+    Identify disaster-affected areas from satellite data — flood extent and
+    depth, landslide scars, potential building collapse, and burned area.</div>
+  <div class="tile"><b>2 · Estimate</b>
+    Overlay the affected area on 38 exposure layers and estimate affected
+    assets, people and direct physical damage in rupiah.</div>
+  <div class="tile"><b>3 · Report</b>
+    Export preliminary assessment tables formatted to support DIBI and
+    Jitupasna reporting, and GIS data for further analysis.</div>
+</div>
+
+<p class="muted">
+The dashboard below shows stored assessments. It is a viewer: new events are
+analysed from the Earth Engine Code Editor (see the <a href="about.html">Manual</a>).
+Active fire monitoring has its own screen on the <a href="forestfire.html">Forest Fire</a> page.
+</p>
+
+</main>
+
 <main class="full">
   <div class="app-frame-wrap" id="app-slot"></div>
 </main>
+
+<main class="page after-app">
+
+<h2>How to read the figures</h2>
+
+<p>
+Every number on the dashboard is either a satellite observation or a model
+estimate, and the two must not be confused — least of all <em>estimated
+damage</em> with <em>reported damage</em>. Reported damage comes from field
+assessment and BNPB's records; nothing on this dashboard replaces it.
+</p>
+
+<table>
+  <thead><tr><th>Figure</th><th>What it is</th></tr></thead>
+  <tbody>
+  <tr><td>Disaster extent</td><td>Satellite-detected area, plus — for floods — area inferred from terrain and the estimated water level (<a href="flood.html#classes">observed, inferred, unknown</a>). For earthquakes, areas where satellite change suggests <em>potential</em> building collapse.</td></tr>
+  <tr><td>Flood depth</td><td>Model-estimated depth from elevation data, not a measured water level.</td></tr>
+  <tr><td>Affected people</td><td>Population located within the estimated affected area (BNPB InaRISK population grid).</td></tr>
+  <tr><td>Damage value</td><td>Model-estimated <b>direct physical damage</b>: exposed assets × replacement unit cost × depth–damage ratio. Indirect economic losses (lost income, business interruption) are not included.</td></tr>
+  <tr><td>Houses affected</td><td>Estimated count of building footprints touching the affected area; for landslides, earthquakes and fires, assets inside the detected area are assumed completely destroyed.</td></tr>
+  <tr><td>Assessment status</td><td>Preliminary assessment — requires field verification before official use.</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+<strong>What the tool does and does not do.</strong> Floods, landslides and
+earthquakes share one workflow: detect the affected area from satellite
+images, estimate damage from exposure and cost data, review and export. Fire
+has two separate functions — active fire monitoring (VIIRS thermal detections,
+no damage estimate) and burned area mapping (Sentinel-1 radar), the latter
+feeding the same damage estimation since 2026-10-17. The tool produces
+preliminary assessment tables formatted to support DIBI and Jitupasna
+reporting; additional information and field verification may be required for
+official submission.
+</div>
+
+<p class="muted">
+Hazard pages: <a href="flood.html">Flood</a> ·
+<a href="landslide.html">Landslide</a> ·
+<a href="earthquake.html">Earthquake</a> ·
+<a href="forestfire.html">Forest Fire</a> ·
+<a href="datacheck.html">Data Check</a> ·
+<a href="about.html">Manual</a>
+</p>
+
+</main>
+
+<footer class="site">
+  BNPB × JICA technical cooperation — Google Earth Engine implementation.
+</footer>
 
 <script src="assets/config.js?v=2"></script>
 <script>mountApp('dashboard');</script>

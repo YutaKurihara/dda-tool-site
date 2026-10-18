@@ -7,16 +7,22 @@ GEE App 埋め込み + 手法解説の静的サイト。ビルド不要の素の
 
 | ファイル | 内容 |
 |---|---|
-| `index.html` | ホーム = ダッシュボード(GEE App を全画面 iframe 埋め込み) |
-| `flood.html` | 洪水 — Sentinel-1 dB 差分検知(flood/dry/unknown の 3 区分)+ FwDET 浸水深・推論域の解説 |
-| `landslide.html` | 土砂災害 — Sentinel-2 NDVI 変化検知と道路寸断点の解説 |
-| `earthquake.html` | 地震 — RV-PWTT 建物倒壊検知の解説 |
-| `forestfire.html` | 森林火災 — VIIRS 日次モニタ(App 埋め込み)と、§5 に Sentinel-1 時系列の焼失域検知器(05_burnscar_detection.js) |
-| `datacheck.html` | Data Check — App 埋め込み + 07_datacheck.js のソースコード(Prism でハイライト) |
-| `about.html` | 運用手順書 — 3 ステージのパイプライン・Asset の配置・コード体系(Kemendagri と DIBI の BPS)・トラブルシューティング |
+| `index.html` | ホーム = ツールの目的・Map/Estimate/Report の 3 機能・ダッシュボード(GEE App 埋め込み)・「数値の読み方」(観測と推定の区別) |
+| `flood.html` | Flood Mapping and Damage Assessment — 冒頭は目的・提供物・4 ステップ・Observed/Inferred/Unknown 表・限界、後半 Technical details(dB 差分検知・3 区分・FwDET・パラメータ・Changelog) |
+| `landslide.html` | Landslide Detection and Impact Assessment — 全損仮定・Potential Road Blockages を前に、検出手法は Technical details |
+| `earthquake.html` | Potential Building Collapse Detection — Palu 検証の Precision 24 % / Recall 62 % を正面に、RV-PWTT は Technical details |
+| `forestfire.html` | Forest Fire Monitoring and Burned Area Mapping — Part A 熱源監視(VIIRS の面積は「active-fire detection footprint」と読む)、Part B 焼失域(S1 時系列、status 3 段階、Stage 2 算定) |
+| `datacheck.html` | Data Quality and Damage Estimation Verification — App 埋め込み + 何が確認できるか + ソースは折りたたみ |
+| `about.html` | User Manual — 1 Overview / 2 Quick Start / 3 Requirements / 4–6 Step 1–3 / 7 Data verification / 8 Troubleshooting / Appendix A スクリプト・B Asset・C 計算式 |
 | `code/07_datacheck.js` | datacheck.html が fetch するコードのコピー。**01_shared 側を更新したら再コピーすること** |
 | `assets/config.js` | **GEE App の URL を設定する唯一のファイル**(dashboard / datacheck / forestfire) |
 | `assets/style.css` | 共通スタイル(PWTT/Quarto 風・学術ドキュメント調) |
+
+2026-10-17 の全面再構成(外部レビュー「サイト全体を確認.pdf」対応): 全ページを
+「何ができるか → 提供物 → How it works → 精度と限界 → 出力 → Technical details」の順に並べ替え、
+観測／推定／仮定(Inferred flood・Potential collapse・Active-fire footprint・全損仮定)を明示、
+用語を「estimated direct physical damage」「preliminary tables formatted to support DIBI/Jitupasna」に統一。
+技術情報は削除せず後半に残してある。**VIIRS App 本体のキャプション(burned area)は未変更**(コード側の作業)。
 
 干ばつ(drought.html)は 2026-10-17 に掲載を取り下げた。`03_dashboard/03_drought.js` が
 ツールから外れたため。ページ本体は `../site_archive/` に退避してあり、公開されない。
